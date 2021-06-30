@@ -29,6 +29,8 @@ namespace test_utils {
 
 std::string getDatasetDir()
 {
+  // std::getenv 
+  // serach directory named "SVO_DATASET_DIR" from enviroment, and return the path of that directory
   const char* env_dir = std::getenv("SVO_DATASET_DIR");
 #ifdef SVO_USE_ROS
   std::string dataset_dir(ros::package::getPath("svo")+"/test/data");

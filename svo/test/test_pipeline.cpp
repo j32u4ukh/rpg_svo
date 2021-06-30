@@ -61,6 +61,9 @@ void BenchmarkNode::runFromFolder()
   for(int img_id = 2; img_id < 188; ++img_id)
   {
     // load image
+    /*
+    參考：https://www.runoob.com/w3cnote/cpp-func-setw.html
+    */
     std::stringstream ss;
     ss << svo::test_utils::getDatasetDir() << "/sin2_tex2_h1_v8_d/img/frame_"
        << std::setw( 6 ) << std::setfill( '0' ) << img_id << "_0.png";
