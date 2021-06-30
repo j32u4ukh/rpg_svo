@@ -92,9 +92,10 @@ bool FrameHandlerBase::startFrameProcessingCommon(const double timestamp)
     stage_ = STAGE_FIRST_FRAME;
   }
 
-  if(stage_ == STAGE_PAUSED)
+  if(stage_ == STAGE_PAUSED){
     return false;
-
+  }
+    
   SVO_LOG(timestamp);
   SVO_DEBUG_STREAM("New Frame");
   SVO_START_TIMER("tot_time");
@@ -102,6 +103,7 @@ bool FrameHandlerBase::startFrameProcessingCommon(const double timestamp)
 
   // some cleanup from last iteration, can't do before because of visualization
   map_.emptyTrash();
+
   return true;
 }
 
@@ -115,8 +117,11 @@ int FrameHandlerBase::finishFrameProcessingCommon(
 
   // save processing time to calculate fps
   acc_frame_timings_.push_back(timer_.stop());
-  if(stage_ == STAGE_DEFAULT_FRAME)
+  
+  if(stage_ == STAGE_DEFAULT_FRAME){
     acc_num_obs_.push_back(num_observations);
+  }
+
   num_obs_last_ = num_observations;
   SVO_STOP_TIMER("tot_time");
 

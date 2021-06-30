@@ -72,7 +72,11 @@ class Map : boost::noncopyable
 {
 public:
   list< FramePtr > keyframes_;          //!< List of keyframes in the map.
-  list< Point* > trash_points_;         //!< A deleted point is moved to the trash bin. Now and then this is cleaned. One reason is that the visualizer must remove the points also.
+  
+  // A deleted point is moved to the trash bin. Now and then this is cleaned. 
+  // One reason is that the visualizer must remove the points also.
+  list< Point* > trash_points_;
+  
   MapPointCandidates point_candidates_;
 
   Map();

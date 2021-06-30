@@ -194,16 +194,46 @@ void Map::transform(const Matrix3d& R, const Vector3d& t, const double& s)
 
 void Map::emptyTrash()
 {
+  /*
+  std::for_each
+  參考：https://blog.csdn.net/u014613043/article/details/50619254
+
+  *& 指標的引用
+  void*& func(Point*& pt) 傳入的是 Point*，pt 是該指標的引用，在函式內對 pt 做修改，傳入的外部 Point* 也會被修改
+  參考：https://www.zhihu.com/question/19977090
+
+  lambda
+  [=]：lambda-introducer，也稱為 capture clause。
+  所有的 lambda expression 都是以它來作為開頭，不可以省略，它除了用來作為 lambda expression 開頭的關鍵字之外，
+  也有抓取（capture）變數的功能，指定該如何將目前 scope 範圍之變數抓取至 lambda expression 中使用，而抓取變數的方式
+  則分為傳值（by value）與傳參考（by reference）兩種，跟一般函數參數的傳入方式類似，不過其語法有些不同，以下我們以
+  範例解釋：
+
+        []：只有兩個中括號，完全不抓取外部的變數。
+        [=]：所有的變數都以傳值（by value）的方式抓取。
+        [&]：所有的變數都以傳參考（by reference）的方式抓取。
+        [x, &y]：x 變數使用傳值、y 變數使用傳參考。
+        [=, &y]：除了 y 變數使用傳參考之外，其餘的變數皆使用傳值的方式。
+        [&, x]：除了 x 變數使用傳值之外，其餘的變數皆使用傳參考的方式。
+
+  這裡要注意一點，預設的抓取選項（capture-default，亦即 = 或是 &）要放在所有的項目之前，也就是放在第一個位置。
+  參考：https://blog.gtwang.org/programming/lambda-expression-in-c11/
+  */
   std::for_each(trash_points_.begin(), trash_points_.end(), [&](Point*& pt){
+    // 釋放 pt 所指向的記憶體區域
     delete pt;
-    pt=NULL;
+
+    // 指標指向 NULL
+    pt = NULL;
+
+    // 參考：https://stackoverflow.com/questions/13223399/deleting-a-pointer-in-c
   });
+
   trash_points_.clear();
   point_candidates_.emptyTrash();
 }
 
-MapPointCandidates::MapPointCandidates()
-{}
+MapPointCandidates::MapPointCandidates(){}
 
 MapPointCandidates::~MapPointCandidates()
 {

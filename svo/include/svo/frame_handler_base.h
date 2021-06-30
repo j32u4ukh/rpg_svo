@@ -86,11 +86,19 @@ public:
   size_t lastNumObservations() const { return num_obs_last_; }
 
 protected:
-  Stage stage_;                 //!< Current stage of the algorithm.
+  // Current stage of the algorithm.
+  Stage stage_;
+  
   bool set_reset_;              //!< Flag that the user can set. Will reset the system before the next iteration.
-  bool set_start_;              //!< Flag the user can set to start the system when the next image is received.
+  
+  // Flag the user can set to start the system when the next image is received.
+  bool set_start_;
+  
   Map map_;                     //!< Map of keyframes created by the slam system.
-  vk::Timer timer_;             //!< Stopwatch to measure time to process frame.
+
+  // Stopwatch to measure time to process frame.
+  vk::Timer timer_;             
+
   vk::RingBuffer<double> acc_frame_timings_;    //!< Total processing time of the last 10 frames, used to give some user feedback on the performance.
   vk::RingBuffer<size_t> acc_num_obs_;          //!< Number of observed features of the last 10 frames, used to give some user feedback on the tracking performance.
   size_t num_obs_last_;                         //!< Number of observations in the previous frame.

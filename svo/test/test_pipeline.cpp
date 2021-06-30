@@ -62,18 +62,24 @@ void BenchmarkNode::runFromFolder()
   {
     // load image
     /*
+    std::setw 格式化字串長度
     參考：https://www.runoob.com/w3cnote/cpp-func-setw.html
+
+    std::setfill 格式化的字串長度不足時，用什麼來填充至指定長度
     */
     std::stringstream ss;
     ss << svo::test_utils::getDatasetDir() << "/sin2_tex2_h1_v8_d/img/frame_"
        << std::setw( 6 ) << std::setfill( '0' ) << img_id << "_0.png";
-    if(img_id == 2)
+
+    if(img_id == 2){
       std::cout << "reading image " << ss.str() << std::endl;
+    }
+      
     cv::Mat img(cv::imread(ss.str().c_str(), 0));
     assert(!img.empty());
 
     // process frame
-    vo_->addImage(img, 0.01*img_id);
+    vo_->addImage(img, 0.01 * img_id);
 
     // display tracking quality
     if(vo_->lastFrame() != NULL)
@@ -95,7 +101,9 @@ int main(int argc, char** argv)
     svo::BenchmarkNode benchmark;
     benchmark.runFromFolder();
   }
+
   printf("BenchmarkNode finished.\n");
+  
   return 0;
 }
 
