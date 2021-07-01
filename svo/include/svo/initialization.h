@@ -29,7 +29,17 @@ namespace initialization {
 enum InitResult { FAILURE, NO_KEYFRAME, SUCCESS };
 
 /// Tracks features using Lucas-Kanade tracker and then estimates a homography.
+/* Homography 單應矩陣
+若場景中的特徵點都落在同一平面上(如牆、地面等)，則可透過單應性進行運動估計，
+單應矩陣(Homography) H 描述了兩個平面之間的對應關係。
+專案 svo 的目標是重建無人機的俯視相機的影像，因此這裡使用 Homography 來追蹤特徵點
+*/ 
 class KltHomographyInit {
+  /* friend class
+  在定義類別成員時，私用成員只能被同一個類別定義的成員存取，不可以直接由外界進行存取，
+  然而有些時候，您希望提供私用成員給某些外部函式來存取，這時您 可以設定類別的「好友」，只有好友才可以直接存取自家的私用成員。
+  參考：https://openhome.cc/Gossip/CppGossip/friendFunctionClass.html
+  */
   friend class svo::FrameHandlerMono;
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW

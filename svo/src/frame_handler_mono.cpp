@@ -57,13 +57,17 @@ FrameHandlerMono::~FrameHandlerMono()
 
 void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
 {
-  // 確保目前階段不是 STAGE_PAUSED
+  // 確保目前階段不是 STAGE_PAUSED，並清空垃圾桶內的 Point*
   if(!startFrameProcessingCommon(timestamp)){
     return;
   }
 
   // some cleanup from last iteration, can't do before because of visualization
+  // set<FramePtr> core_kfs_：Keyframes in the closer neighbourhood.
   core_kfs_.clear();
+
+  // All keyframes with overlapping field of view
+  // vector< pair<FramePtr,size_t> > overlap_kfs_：All keyframes with overlapping field of view. 
   overlap_kfs_.clear();
 
   // create new frame
@@ -73,15 +77,20 @@ void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
 
   // process frame
   UpdateResult res = RESULT_FAILURE;
-  if(stage_ == STAGE_DEFAULT_FRAME)
+
+  if(stage_ == STAGE_DEFAULT_FRAME){
     res = processFrame();
-  else if(stage_ == STAGE_SECOND_FRAME)
+  }    
+  else if(stage_ == STAGE_SECOND_FRAME){
     res = processSecondFrame();
-  else if(stage_ == STAGE_FIRST_FRAME)
+  }    
+  else if(stage_ == STAGE_FIRST_FRAME){
     res = processFirstFrame();
-  else if(stage_ == STAGE_RELOCALIZING)
+  }    
+  else if(stage_ == STAGE_RELOCALIZING){
     res = relocalizeFrame(SE3(Matrix3d::Identity(), Vector3d::Zero()),
                           map_.getClosestKeyframe(last_frame_));
+  }
 
   // set last frame
   last_frame_ = new_frame_;
@@ -93,12 +102,16 @@ void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
 FrameHandlerMono::UpdateResult FrameHandlerMono::processFirstFrame()
 {
   new_frame_->T_f_w_ = SE3(Matrix3d::Identity(), Vector3d::Zero());
-  if(klt_homography_init_.addFirstFrame(new_frame_) == initialization::FAILURE)
+
+  if(klt_homography_init_.addFirstFrame(new_frame_) == initialization::FAILURE){
     return RESULT_NO_KEYFRAME;
+  }
+    
   new_frame_->setKeyframe();
   map_.addKeyframe(new_frame_);
   stage_ = STAGE_SECOND_FRAME;
   SVO_INFO_STREAM("Init: Selected first frame.");
+  
   return RESULT_IS_KEYFRAME;
 }
 

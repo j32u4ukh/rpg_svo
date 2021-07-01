@@ -229,6 +229,11 @@ void Map::emptyTrash()
     // 參考：https://stackoverflow.com/questions/13223399/deleting-a-pointer-in-c
   });
 
+  /*
+  list.clear()
+  清空 std::list 容器
+  參考：https://www.cplusplus.com/reference/list/list/clear/
+  */
   trash_points_.clear();
   point_candidates_.emptyTrash();
 }
@@ -319,8 +324,10 @@ void MapPointCandidates::deleteCandidate(PointCandidate& c)
 void MapPointCandidates::emptyTrash()
 {
   std::for_each(trash_points_.begin(), trash_points_.end(), [&](Point*& p){
-    delete p; p=NULL;
+    delete p; 
+    p = NULL;
   });
+
   trash_points_.clear();
 }
 

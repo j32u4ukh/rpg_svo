@@ -95,6 +95,13 @@ namespace svo
 #endif
 
   class Frame;
+
+  /*
+  boost::shared_ptr VS std::shared_ptr
+  可以將 boost::shared_ptr 更換為 std::shared_ptr
+  參考：
+  https://stackoverflow.com/questions/6322245/should-i-switch-from-using-boostshared-ptr-to-stdshared-ptr
+  */
   typedef boost::shared_ptr<Frame> FramePtr;
 } // namespace svo
 
