@@ -33,6 +33,7 @@ struct Corner
   int level;    //!< pyramid level of the corner.
   float score;  //!< shi-tomasi score of the corner.
   float angle;  //!< for gradient-features: dominant gradient angle.
+  
   Corner(int x, int y, float score, int level, float angle) :
     x(x), y(y), level(level), score(score), angle(angle)
   {}

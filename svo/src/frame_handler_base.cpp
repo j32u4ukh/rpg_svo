@@ -140,10 +140,13 @@ int FrameHandlerBase::finishFrameProcessingCommon(
     stage_ = STAGE_RELOCALIZING;
     tracking_quality_ = TRACKING_INSUFFICIENT;
   }
-  else if (dropout == RESULT_FAILURE)
+  else if (dropout == RESULT_FAILURE){
     resetAll();
-  if(set_reset_)
+  }
+    
+  if(set_reset_){
     resetAll();
+  }
 
   return 0;
 }

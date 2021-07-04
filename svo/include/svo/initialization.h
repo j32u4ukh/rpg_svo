@@ -44,7 +44,9 @@ class KltHomographyInit {
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+  // Frame 的 shared_ptr
   FramePtr frame_ref_;
+
   KltHomographyInit() {};
   ~KltHomographyInit() {};
   InitResult addFirstFrame(FramePtr frame_ref);
@@ -52,11 +54,21 @@ public:
   void reset();
 
 protected:
-  vector<cv::Point2f> px_ref_;      //!< keypoints to be tracked in reference frame.
-  vector<cv::Point2f> px_cur_;      //!< tracked keypoints in current frame.
-  vector<Vector3d> f_ref_;          //!< bearing vectors corresponding to the keypoints in the reference image.
-  vector<Vector3d> f_cur_;          //!< bearing vectors corresponding to the keypoints in the current image.
-  vector<double> disparities_;      //!< disparity between first and second frame.
+  // keypoints to be tracked in reference frame.
+  vector<cv::Point2f> px_ref_;
+
+  // tracked keypoints in current frame.
+  vector<cv::Point2f> px_cur_;
+  
+  // bearing vectors corresponding to the keypoints in the reference image.
+  vector<Vector3d> f_ref_;
+  
+  // bearing vectors corresponding to the keypoints in the current image.
+  vector<Vector3d> f_cur_;
+  
+  // 前後幀各個角點之間的距離 disparity between first and second frame.
+  vector<double> disparities_;      
+
   vector<int> inliers_;             //!< inliers after the geometric check (e.g., Homography).
   vector<Vector3d> xyz_in_cur_;     //!< 3D points computed during the geometric check.
   SE3 T_cur_from_ref_;              //!< computed transformation between the first two frames.

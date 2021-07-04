@@ -33,6 +33,9 @@ namespace svo {
 class Point;
 struct Feature;
 
+// list 封裝了連結串列, Vector 封裝了陣列, list 和 vector 得最主要的區別在於 vector 使用連續記憶體儲存的，
+// 支援[] 運算子，而 list 是以連結串列形式實現的，不支援 []。
+// 參考：https://www.itread01.com/content/1545064408.html
 typedef list<Feature*> Features;
 typedef vector<cv::Mat> ImgPyr;
 
@@ -45,11 +48,21 @@ public:
   static int                    frame_counter_;         //!< Counts the number of created frames. Used to set the unique id.
   int                           id_;                    //!< Unique id of the frame.
   double                        timestamp_;             //!< Timestamp of when the image was recorded.
-  vk::AbstractCamera*           cam_;                   //!< Camera model.
-  Sophus::SE3                   T_f_w_;                 //!< Transform (f)rame from (w)orld.
+  
+  // Camera model.
+  vk::AbstractCamera*           cam_;
+  
+  // Transform (f)rame from (w)orld.
+  Sophus::SE3                   T_f_w_;
+                   
   Matrix<double, 6, 6>          Cov_;                   //!< Covariance.
-  ImgPyr                        img_pyr_;               //!< Image Pyramid.
-  Features                      fts_;                   //!< List of features in the image.
+
+  // Image Pyramid.
+  ImgPyr img_pyr_;
+  
+  // List of features in the image.
+  Features                      fts_;
+  
   vector<Feature*>              key_pts_;               //!< Five features and associated 3D points which are used to detect if two frames have overlapping field of view.
   bool                          is_keyframe_;           //!< Was this frames selected as keyframe?
   g2oFrameSE3*                  v_kf_;                  //!< Temporary pointer to the g2o node object of the keyframe.

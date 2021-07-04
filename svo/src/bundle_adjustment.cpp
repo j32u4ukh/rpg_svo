@@ -38,6 +38,8 @@
 namespace svo {
 namespace ba {
 
+
+// 優化兩頁框的位姿估計，以及空間點的估計，誤差過大的空間點則刪除
 void twoViewBA(
     Frame* frame1,
     Frame* frame2,
@@ -66,38 +68,54 @@ void twoViewBA(
   for(Features::iterator it_ftr=frame1->fts_.begin(); it_ftr!=frame1->fts_.end(); ++it_ftr)
   {
     Point* pt = (*it_ftr)->point;
-    if(pt == NULL)
+
+    if(pt == NULL){
       continue;
+    }
+      
     g2oPoint* v_pt = createG2oPoint(pt->pos_, v_id++, false);
     optimizer.addVertex(v_pt);
     pt->v_pt_ = v_pt;
-    g2oEdgeSE3* e = createG2oEdgeSE3(v_frame1, v_pt, vk::project2d((*it_ftr)->f), true, reproj_thresh*Config::lobaRobustHuberWidth());
+
+    // Edge between frame1 and point
+    g2oEdgeSE3* e = createG2oEdgeSE3(
+      v_frame1, v_pt, vk::project2d((*it_ftr)->f), true, reproj_thresh*Config::lobaRobustHuberWidth());
     optimizer.addEdge(e);
-    edges.push_back(EdgeContainerSE3(e, frame1, *it_ftr)); // TODO feature now links to frame, so we can simplify edge container!
+
+    // TODO feature now links to frame, so we can simplify edge container!
+    edges.push_back(EdgeContainerSE3(e, frame1, *it_ftr)); 
 
     // find at which index the second frame observes the point
     Feature* ftr_frame2 = pt->findFrameRef(frame2);
-    e = createG2oEdgeSE3(v_frame2, v_pt, vk::project2d(ftr_frame2->f), true, reproj_thresh*Config::lobaRobustHuberWidth());
+
+    // Edge between frame2 and point
+    e = createG2oEdgeSE3(
+      v_frame2, v_pt, vk::project2d(ftr_frame2->f), true, reproj_thresh*Config::lobaRobustHuberWidth());
     optimizer.addEdge(e);
     edges.push_back(EdgeContainerSE3(e, frame2, ftr_frame2));
   }
 
   // Optimization
   double init_error, final_error;
+
+  // 執行優化
   runSparseBAOptimizer(&optimizer, Config::lobaNumIter(), init_error, final_error);
   printf("2-View BA: Error before/after = %f / %f\n", init_error, final_error);
 
   // Update Keyframe Positions
   frame1->T_f_w_.rotation_matrix() = v_frame1->estimate().rotation().toRotationMatrix();
   frame1->T_f_w_.translation() = v_frame1->estimate().translation();
+
   frame2->T_f_w_.rotation_matrix() = v_frame2->estimate().rotation().toRotationMatrix();
   frame2->T_f_w_.translation() = v_frame2->estimate().translation();
 
   // Update Mappoint Positions
   for(Features::iterator it=frame1->fts_.begin(); it!=frame1->fts_.end(); ++it)
   {
-    if((*it)->point == NULL)
-     continue;
+    if((*it)->point == NULL){
+      continue;
+    }
+     
     (*it)->point->pos_ = (*it)->point->v_pt_->estimate();
     (*it)->point->v_pt_ = NULL;
   }
@@ -105,7 +123,9 @@ void twoViewBA(
   // Find Mappoints with too large reprojection error
   const double reproj_thresh_squared = reproj_thresh*reproj_thresh;
   size_t n_incorrect_edges = 0;
-  for(list<EdgeContainerSE3>::iterator it_e = edges.begin(); it_e != edges.end(); ++it_e)
+
+  // 刪除 map 當中，重投影誤差過大的空間點
+  for(list<EdgeContainerSE3>::iterator it_e = edges.begin(); it_e != edges.end(); ++it_e){
     if(it_e->edge->chi2() > reproj_thresh_squared)
     {
       if(it_e->feature->point != NULL)
@@ -113,8 +133,10 @@ void twoViewBA(
         map->safeDeletePoint(it_e->feature->point);
         it_e->feature->point = NULL;
       }
+      
       ++n_incorrect_edges;
     }
+  }    
 
   printf("2-View BA: Wrong edges =  %zu\n", n_incorrect_edges);
 }
@@ -369,6 +391,7 @@ void setupG2o(g2o::SparseOptimizer * optimizer)
   // setup camera
   g2o::CameraParameters * cam_params = new g2o::CameraParameters(1.0, Vector2d(0.,0.), 0.);
   cam_params->setId(0);
+
   if (!optimizer->addParameter(cam_params)) {
     assert(false);
   }

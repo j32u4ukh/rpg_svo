@@ -135,7 +135,9 @@ public:
       const double px_error_angle);
 
 protected:
+  // 此專案中使用 FastDetector 作為深度濾波器的特徵檢測器
   feature_detection::DetectorPtr feature_detector_;
+
   callback_t seed_converged_cb_;
   std::list<Seed> seeds_;
   boost::mutex seeds_mut_;

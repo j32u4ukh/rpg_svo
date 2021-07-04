@@ -69,11 +69,19 @@ void FastDetector::detect(
     const double detection_threshold,
     Features& fts)
 {
-  Corners corners(grid_n_cols_*grid_n_rows_, Corner(0,0,detection_threshold,0,0.0f));
-  for(int L=0; L<n_pyr_levels_; ++L)
+  // typedef vector<Corner> Corners;
+  // Corner(int x, int y, float score, int level, float angle)
+  // vector 初始化：長度為 grid_n_cols_ * grid_n_rows_，預設值為 Corner(0, 0, detection_threshold, 0, 0.0f)
+  Corners corners(grid_n_cols_ * grid_n_rows_, Corner(0, 0, detection_threshold, 0, 0.0f));
+
+  for(int L = 0; L < n_pyr_levels_; ++L)
   {
-    const int scale = (1<<L);
+    // << 位元往左 1 位，相當於乘以 2
+    const int scale = (1 << L);
+
+    // 
     vector<fast::fast_xy> fast_corners;
+
 #if __SSE2__
       fast::fast_corner_detect_10_sse2(
           (fast::fast_byte*) img_pyr[L].data, img_pyr[L].cols,
@@ -87,8 +95,10 @@ void FastDetector::detect(
           (fast::fast_byte*) img_pyr[L].data, img_pyr[L].cols,
           img_pyr[L].rows, img_pyr[L].cols, 20, fast_corners);
 #endif
+
     vector<int> scores, nm_corners;
-    fast::fast_corner_score_10((fast::fast_byte*) img_pyr[L].data, img_pyr[L].cols, fast_corners, 20, scores);
+    fast::fast_corner_score_10(
+      (fast::fast_byte*) img_pyr[L].data, img_pyr[L].cols, fast_corners, 20, scores);
     fast::fast_nonmax_3x3(fast_corners, scores, nm_corners);
 
     for(auto it=nm_corners.begin(), ite=nm_corners.end(); it!=ite; ++it)
@@ -96,18 +106,24 @@ void FastDetector::detect(
       fast::fast_xy& xy = fast_corners.at(*it);
       const int k = static_cast<int>((xy.y*scale)/cell_size_)*grid_n_cols_
                   + static_cast<int>((xy.x*scale)/cell_size_);
-      if(grid_occupancy_[k])
+
+      if(grid_occupancy_[k]){
         continue;
+      }
+        
       const float score = vk::shiTomasiScore(img_pyr[L], xy.x, xy.y);
-      if(score > corners.at(k).score)
+      
+      if(score > corners.at(k).score){
         corners.at(k) = Corner(xy.x*scale, xy.y*scale, score, L, 0.0f);
+      }        
     }
   }
 
   // Create feature for every corner that has high enough corner score
   std::for_each(corners.begin(), corners.end(), [&](Corner& c) {
-    if(c.score > detection_threshold)
+    if(c.score > detection_threshold){
       fts.push_back(new Feature(frame, Vector2d(c.x, c.y), c.level));
+    }      
   });
 
   resetGrid();

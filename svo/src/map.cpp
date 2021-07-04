@@ -112,15 +112,20 @@ void Map::getCloseKeyframes(
     // check if kf has overlaping field of view with frame, use therefore KeyPoints
     for(auto keypoint : kf->key_pts_)
     {
-      if(keypoint == nullptr)
+      if(keypoint == nullptr){
         continue;
+      }
 
+      // 將點 xyz_w 轉換到相機座標系下，進而判斷相機能否看到該點（是否在相機的前面，且在成像平面的投影範圍內）
+      // frame 可以看到 kf 的關鍵點，表示兩者觀測著差不多的區域，兩幀之間的距離也應相近
       if(frame->isVisible(keypoint->point->pos_))
       {
+        // 和當前 Frame 觀測到相同的關鍵點的關鍵幀，以及和它的距離
         close_kfs.push_back(
-            std::make_pair(
-                kf, (frame->T_f_w_.translation()-kf->T_f_w_.translation()).norm()));
-        break; // this keyframe has an overlapping field of view -> add to close_kfs
+            std::make_pair(kf, (frame->T_f_w_.translation() - kf->T_f_w_.translation()).norm()));
+
+        // this keyframe has an overlapping field of view -> add to close_kfs
+        break; 
       }
     }
   }

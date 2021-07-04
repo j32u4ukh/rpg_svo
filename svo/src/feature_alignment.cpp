@@ -43,14 +43,17 @@ bool align1D(
 
   // compute derivative of template and prepare inverse compositional
   float __attribute__((__aligned__(16))) ref_patch_dv[patch_area];
-  Matrix2f H; H.setZero();
+  Matrix2f H; 
+  H.setZero();
 
   // compute gradient and hessian
   const int ref_step = patch_size+2;
   float* it_dv = ref_patch_dv;
+
   for(int y=0; y<patch_size; ++y)
   {
     uint8_t* it = ref_patch_with_border + (y+1)*ref_step + 1;
+
     for(int x=0; x<patch_size; ++x, ++it, ++it_dv)
     {
       Vector2f J;
@@ -60,6 +63,7 @@ bool align1D(
       H += J*J.transpose();
     }
   }
+
   h_inv = 1.0/H(0,0)*patch_size*patch_size;
   Matrix2f Hinv = H.inverse();
   float mean_diff = 0;
@@ -73,6 +77,7 @@ bool align1D(
   const int cur_step = cur_img.step.p[0];
   float chi2 = 0;
   Vector2f update; update.setZero();
+
   for(int iter = 0; iter<n_iter; ++iter)
   {
     int u_r = floor(u);
@@ -96,9 +101,11 @@ bool align1D(
     float* it_ref_dv = ref_patch_dv;
     float new_chi2 = 0.0;
     Vector2f Jres; Jres.setZero();
+
     for(int y=0; y<patch_size; ++y)
     {
       uint8_t* it = (uint8_t*) cur_img.data + (v_r+y-halfpatch_size_)*cur_step + u_r-halfpatch_size_;
+
       for(int x=0; x<patch_size; ++x, ++it, ++it_ref, ++it_ref_dv)
       {
         float search_pixel = wTL*it[0] + wTR*it[1] + wBL*it[cur_step] + wBR*it[cur_step+1];
@@ -173,9 +180,11 @@ bool align2D(
   const int ref_step = patch_size_+2;
   float* it_dx = ref_patch_dx;
   float* it_dy = ref_patch_dy;
+
   for(int y=0; y<patch_size_; ++y)
   {
     uint8_t* it = ref_patch_with_border + (y+1)*ref_step + 1;
+
     for(int x=0; x<patch_size_; ++x, ++it, ++it_dx, ++it_dy)
     {
       Vector3f J;
@@ -187,6 +196,7 @@ bool align2D(
       H += J*J.transpose();
     }
   }
+
   Matrix3f Hinv = H.inverse();
   float mean_diff = 0;
 
@@ -199,10 +209,12 @@ bool align2D(
   const int cur_step = cur_img.step.p[0];
 //  float chi2 = 0;
   Vector3f update; update.setZero();
+
   for(int iter = 0; iter<n_iter; ++iter)
   {
     int u_r = floor(u);
     int v_r = floor(v);
+
     if(u_r < halfpatch_size_ || v_r < halfpatch_size_ || u_r >= cur_img.cols-halfpatch_size_ || v_r >= cur_img.rows-halfpatch_size_)
       break;
 
@@ -223,9 +235,11 @@ bool align2D(
     float* it_ref_dy = ref_patch_dy;
 //    float new_chi2 = 0.0;
     Vector3f Jres; Jres.setZero();
+
     for(int y=0; y<patch_size_; ++y)
     {
       uint8_t* it = (uint8_t*) cur_img.data + (v_r+y-halfpatch_size_)*cur_step + u_r-halfpatch_size_;
+      
       for(int x=0; x<patch_size_; ++x, ++it, ++it_ref, ++it_ref_dx, ++it_ref_dy)
       {
         float search_pixel = wTL*it[0] + wTR*it[1] + wBL*it[cur_step] + wBR*it[cur_step+1];

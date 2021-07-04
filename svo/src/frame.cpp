@@ -138,14 +138,23 @@ void Frame::removeKeyPoint(Feature* ftr)
     setKeyPoints();
 }
 
+// 將點 xyz_w 轉換到相機座標系下，進而判斷相機能否看到該點（是否在相機的前面，且在成像平面的投影範圍內）
 bool Frame::isVisible(const Vector3d& xyz_w) const
 {
-  Vector3d xyz_f = T_f_w_*xyz_w;
-  if(xyz_f.z() < 0.0)
-    return false; // point is behind the camera
+  Vector3d xyz_f = T_f_w_ * xyz_w;
+
+  // 在相機後面，無法被觀察到 point is behind the camera
+  if(xyz_f.z() < 0.0){
+    return false; 
+  }
+
   Vector2d px = f2c(xyz_f);
-  if(px[0] >= 0.0 && px[1] >= 0.0 && px[0] < cam_->width() && px[1] < cam_->height())
+
+  // 檢查是否在成像平面的投影範圍內
+  if(px[0] >= 0.0 && px[1] >= 0.0 && px[0] < cam_->width() && px[1] < cam_->height()){
     return true;
+  }
+    
   return false;
 }
 
@@ -164,11 +173,13 @@ void createImgPyramid(const cv::Mat& img_level_0, int n_levels, ImgPyr& pyr)
   }
 }
 
+// 取深度的中位數，以及最小值
 bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min)
 {
   vector<double> depth_vec;
   depth_vec.reserve(frame.fts_.size());
   depth_min = std::numeric_limits<double>::max();
+
   for(auto it=frame.fts_.begin(), ite=frame.fts_.end(); it!=ite; ++it)
   {
     if((*it)->point != NULL)
@@ -178,12 +189,16 @@ bool getSceneDepth(const Frame& frame, double& depth_mean, double& depth_min)
       depth_min = fmin(z, depth_min);
     }
   }
+
   if(depth_vec.empty())
   {
     SVO_WARN_STREAM("Cannot set scene depth. Frame has no point-observations!");
     return false;
   }
+
+  // 取深度的中位數，作為場景深度平均值
   depth_mean = vk::getMedian(depth_vec);
+
   return true;
 }
 

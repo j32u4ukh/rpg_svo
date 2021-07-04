@@ -65,9 +65,12 @@ void Point::addFrameRef(Feature* ftr)
 
 Feature* Point::findFrameRef(Frame* frame)
 {
-  for(auto it=obs_.begin(), ite=obs_.end(); it!=ite; ++it)
-    if((*it)->frame == frame)
+  for(auto it=obs_.begin(), ite=obs_.end(); it!=ite; ++it){
+    if((*it)->frame == frame){
       return *it;
+    }
+  }   
+      
   return NULL;    // no keyframe found
 }
 
@@ -94,25 +97,46 @@ void Point::initNormal()
   normal_set_ = true;
 }
 
+// 返回是否找到夾角最小的頁框，將 ftr 更新為『和當前頁框夾角最小的頁框（同樣有觀察到當前這個 Point）的特徵』
 bool Point::getCloseViewObs(const Vector3d& framepos, Feature*& ftr) const
 {
   // TODO: get frame with same point of view AND same pyramid level!
-  Vector3d obs_dir(framepos - pos_); obs_dir.normalize();
+  // 當前幀到目前這個 Point 的距離
+  Vector3d obs_dir(framepos - pos_);   
+  obs_dir.normalize();
+
+  // obs_：觀察到當前點的特徵們
   auto min_it=obs_.begin();
   double min_cos_angle = 0;
+
   for(auto it=obs_.begin(), ite=obs_.end(); it!=ite; ++it)
   {
-    Vector3d dir((*it)->frame->pos() - pos_); dir.normalize();
+    // (*it)->frame->pos()：取得該特徵所屬的 frame 的位置
+    // 這裡產生遍歷所有觀測到這個 Point 的 frame，是否也包含當前這幀呢？
+    // dir：當前點到該 frame 的向量
+    Vector3d dir((*it)->frame->pos() - pos_); 
+    dir.normalize();
+
+    // 計算 obs_dir 和 dir 之間的 cos 值，由於兩向量長度皆為 1，cos 值相當於兩向量夾角的弧度
     double cos_angle = obs_dir.dot(dir);
+
+    // TODO:這裡的條件是否寫反了？
     if(cos_angle > min_cos_angle)
     {
       min_cos_angle = cos_angle;
       min_it = it;
     }
   }
+
+  // 更新 matcher 的 ref_ftr_
   ftr = *min_it;
-  if(min_cos_angle < 0.5) // assume that observations larger than 60° are useless
+
+  // 排除大於 60° 的情況
+  // assume that observations larger than 60° are useless
+  if(min_cos_angle < 0.5){
     return false;
+  }
+    
   return true;
 }
 

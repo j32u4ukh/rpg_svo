@@ -50,13 +50,25 @@ public:
   Vector3d                    normal_;                  //!< Surface normal at point.
   Matrix3d                    normal_information_;      //!< Inverse covariance matrix of normal estimation.
   bool                        normal_set_;              //!< Flag whether the surface normal was estimated or not.
-  list<Feature*>              obs_;                     //!< References to keyframes which observe the point.
+  
+  // References to keyframes which observe the point.
+  list<Feature*> obs_;                    
+
   size_t                      n_obs_;                   //!< Number of obervations: Keyframes AND successful reprojections in intermediate frames.
   g2oPoint*                   v_pt_;                    //!< Temporary pointer to the point-vertex in g2o during bundle adjustment.
   int                         last_published_ts_;       //!< Timestamp of last publishing.
-  int                         last_projected_kf_id_;    //!< Flag for the reprojection: don't reproject a pt twice.
-  PointType                   type_;                    //!< Quality of the point.
-  int                         n_failed_reproj_;         //!< Number of failed reprojections. Used to assess the quality of the point.
+
+  // 前一個對此 Point 進行重投影的關鍵幀的 ID，避免重複進行重投影
+  // Flag for the reprojection: don't reproject a pt twice.
+  int last_projected_kf_id_;    
+
+  // Quality of the point.
+  PointType  type_;                    
+
+  // Number of failed reprojections. Used to assess the quality of the point.
+  // 紀錄此 Point 重投影失敗次數，用以衡量這個 Point 的好壞
+  int n_failed_reproj_;         
+
   int                         n_succeeded_reproj_;      //!< Number of succeeded reprojections. Used to assess the quality of the point.
   int                         last_structure_optim_;    //!< Timestamp of last point optimization
 

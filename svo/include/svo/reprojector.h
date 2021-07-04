@@ -41,12 +41,11 @@ public:
 
   /// Reprojector config parameters
   struct Options {
-    size_t max_n_kfs;   //!< max number of keyframes to reproject from
+    // max number of keyframes to reproject from
+    size_t max_n_kfs;   
+
     bool find_match_direct;
-    Options()
-    : max_n_kfs(10),
-      find_match_direct(true)
-    {}
+    Options() : max_n_kfs(10), find_match_direct(true){}
   } options_;
 
   size_t n_matches_;
@@ -72,9 +71,14 @@ private:
     Vector2d px;     //!< projected 2D pixel location.
     Candidate(Point* pt, Vector2d& px) : pt(pt), px(px) {}
   };
+  
+  // Cell 包含多個候選的點
   typedef std::list<Candidate > Cell;
+
+  // CandidateGrid 為多個 Cell*
   typedef std::vector<Cell*> CandidateGrid;
 
+  // Cell 包含多個候選的點，其中只會去配對一個點來作為 特徵/角點
   /// The grid stores a set of candidate matches. For every grid cell we try to find one match.
   struct Grid
   {

@@ -29,12 +29,13 @@ namespace svo {
 
 class Feature;
 
+// 測量誤差（Photometric Error），也就是兩個像素點的亮度誤差
 /// Optimize the pose of the frame by minimizing the photometric error of feature patches.
 class SparseImgAlign : public vk::NLLSSolver<6, SE3>
 {
   static const int patch_halfsize_ = 2;
-  static const int patch_size_ = 2*patch_halfsize_;
-  static const int patch_area_ = patch_size_*patch_size_;
+  static const int patch_size_ = 2 * patch_halfsize_;
+  static const int patch_area_ = patch_size_ * patch_size_;
 public:
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
@@ -59,7 +60,10 @@ public:
 protected:
   FramePtr ref_frame_;            //!< reference frame, has depth for gradient pixels.
   FramePtr cur_frame_;            //!< only the image is known!
-  int level_;                     //!< current pyramid level on which the optimization runs.
+
+  // current pyramid level on which the optimization runs.
+  int level_;
+  
   bool display_;                  //!< display residual image.
   int max_level_;                 //!< coarsest pyramid level for the alignment.
   int min_level_;                 //!< finest pyramid level for the alignment.

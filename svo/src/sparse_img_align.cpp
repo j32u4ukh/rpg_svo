@@ -40,10 +40,13 @@ SparseImgAlign::SparseImgAlign(
   eps_ = 0.000001;
 }
 
+// 透過非線性最小平方法（例如高斯牛頓法）最佳化當前幀的位姿估計
 size_t SparseImgAlign::run(FramePtr ref_frame, FramePtr cur_frame)
 {
+  // 重置最佳化參數
   reset();
 
+  // 檢查前一幀特徵點是否為空
   if(ref_frame->fts_.empty())
   {
     SVO_WARN_STREAM("SparseImgAlign: no features to track!");
@@ -54,7 +57,9 @@ size_t SparseImgAlign::run(FramePtr ref_frame, FramePtr cur_frame)
   cur_frame_ = cur_frame;
   ref_patch_cache_ = cv::Mat(ref_frame_->fts_.size(), patch_area_, CV_32F);
   jacobian_cache_.resize(Eigen::NoChange, ref_patch_cache_.rows*patch_area_);
-  visible_fts_.resize(ref_patch_cache_.rows, false); // TODO: should it be reset at each level?
+
+  // TODO: should it be reset at each level?
+  visible_fts_.resize(ref_patch_cache_.rows, false); 
 
   SE3 T_cur_from_ref(cur_frame_->T_f_w_ * ref_frame_->T_f_w_.inverse());
 
@@ -63,13 +68,15 @@ size_t SparseImgAlign::run(FramePtr ref_frame, FramePtr cur_frame)
     mu_ = 0.1;
     jacobian_cache_.setZero();
     have_ref_patch_cache_ = false;
-    if(verbose_)
+
+    if(verbose_){
       printf("\nPYRAMID LEVEL %i\n---------------\n", level_);
+    }
+      
     optimize(T_cur_from_ref);
   }
+
   cur_frame_->T_f_w_ = T_cur_from_ref * ref_frame_->T_f_w_;
-
-
 
   return n_meas_/patch_area_;
 }
@@ -264,7 +271,7 @@ void SparseImgAlign::finishIteration()
 {
   if(display_)
   {
-    cv::namedWindow("residuals", CV_WINDOW_AUTOSIZE);
+    cv::namedWindow("residuals", cv::WINDOW_AUTOSIZE);
     cv::imshow("residuals", resimg_*10);
     cv::waitKey(0);
   }

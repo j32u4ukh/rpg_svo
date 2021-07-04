@@ -30,6 +30,7 @@ namespace svo {
 
 namespace warp {
 
+// 計算參考相機到當前相機的仿射轉換矩陣 A_cur_ref
 void getWarpMatrixAffine(
     const vk::AbstractCamera& cam_ref,
     const vk::AbstractCamera& cam_cur,
@@ -42,30 +43,44 @@ void getWarpMatrixAffine(
 {
   // Compute affine warp matrix A_ref_cur
   const int halfpatch_size = 5;
-  const Vector3d xyz_ref(f_ref*depth_ref);
-  Vector3d xyz_du_ref(cam_ref.cam2world(px_ref + Vector2d(halfpatch_size,0)*(1<<level_ref)));
-  Vector3d xyz_dv_ref(cam_ref.cam2world(px_ref + Vector2d(0,halfpatch_size)*(1<<level_ref)));
+  const Vector3d xyz_ref(f_ref * depth_ref);
+
+  // 根據影像金字塔的 level_ref 調整 px_ref 映射出去的世界座標位置
+  Vector3d xyz_du_ref(cam_ref.cam2world(px_ref + Vector2d(halfpatch_size, 0)*(1<<level_ref)));
+  Vector3d xyz_dv_ref(cam_ref.cam2world(px_ref + Vector2d(0, halfpatch_size)*(1<<level_ref)));
+
+  // 根據 xyz_ref 調整深度
   xyz_du_ref *= xyz_ref[2]/xyz_du_ref[2];
   xyz_dv_ref *= xyz_ref[2]/xyz_dv_ref[2];
+
+  // 轉換為當前相機上的點
   const Vector2d px_cur(cam_cur.world2cam(T_cur_ref*(xyz_ref)));
   const Vector2d px_du(cam_cur.world2cam(T_cur_ref*(xyz_du_ref)));
   const Vector2d px_dv(cam_cur.world2cam(T_cur_ref*(xyz_dv_ref)));
+
+  // 計算仿射轉換矩陣
   A_cur_ref.col(0) = (px_du - px_cur)/halfpatch_size;
   A_cur_ref.col(1) = (px_dv - px_cur)/halfpatch_size;
 }
 
+// 計算仿射轉換矩陣的行列式數值小於 3 的 search_level
 int getBestSearchLevel(
     const Matrix2d& A_cur_ref,
     const int max_level)
 {
   // Compute patch level in other image
   int search_level = 0;
+
+  // 計算行列式
   double D = A_cur_ref.determinant();
+
   while(D > 3.0 && search_level < max_level)
   {
     search_level += 1;
     D *= 0.25;
   }
+
+  // 令仿射轉換矩陣的行列式數值小於 3 的 search_level
   return search_level;
 }
 
@@ -80,6 +95,7 @@ void warpAffine(
 {
   const int patch_size = halfpatch_size*2 ;
   const Matrix2f A_ref_cur = A_cur_ref.inverse().cast<float>();
+
   if(isnan(A_ref_cur(0,0)))
   {
     printf("Affine warp is NaN, probably camera has no translation\n"); // TODO
@@ -89,17 +105,23 @@ void warpAffine(
   // Perform the warp on a larger patch.
   uint8_t* patch_ptr = patch;
   const Vector2f px_ref_pyr = px_ref.cast<float>() / (1<<level_ref);
+
   for (int y=0; y<patch_size; ++y)
   {
     for (int x=0; x<patch_size; ++x, ++patch_ptr)
     {
       Vector2f px_patch(x-halfpatch_size, y-halfpatch_size);
       px_patch *= (1<<search_level);
+
       const Vector2f px(A_ref_cur*px_patch + px_ref_pyr);
-      if (px[0]<0 || px[1]<0 || px[0]>=img_ref.cols-1 || px[1]>=img_ref.rows-1)
+
+      // 修改 patch 當中的數值，且因為是指標，所以會改到實際數值，每次迴圈 patch_ptr 會指向 patch 的下一個位置
+      if (px[0]<0 || px[1]<0 || px[0]>=img_ref.cols-1 || px[1]>=img_ref.rows-1){
         *patch_ptr = 0;
-      else
+      }        
+      else{
         *patch_ptr = (uint8_t) vk::interpolateMat_8u(img_ref, px[0], px[1]);
+      }        
     }
   }
 }
@@ -124,11 +146,14 @@ bool depthFromTriangulation(
 void Matcher::createPatchFromPatchWithBorder()
 {
   uint8_t* ref_patch_ptr = patch_;
+
   for(int y=1; y<patch_size_+1; ++y, ref_patch_ptr += patch_size_)
   {
     uint8_t* ref_patch_border_ptr = patch_with_border_ + y*(patch_size_+2) + 1;
-    for(int x=0; x<patch_size_; ++x)
+
+    for(int x=0; x<patch_size_; ++x){
       ref_patch_ptr[x] = ref_patch_border_ptr[x];
+    }      
   }
 }
 
@@ -137,27 +162,43 @@ bool Matcher::findMatchDirect(
     const Frame& cur_frame,
     Vector2d& px_cur)
 {
-  if(!pt.getCloseViewObs(cur_frame.pos(), ref_ftr_))
+  // getCloseViewObs
+  // 返回是否找到夾角最小的頁框，將 ftr 更新為『和當前頁框夾角最小的頁框（同樣有觀察到當前這個 Point）的特徵』
+  // ref_ftr_ 是有觀察到 pt 的 Feature
+  if(!pt.getCloseViewObs(cur_frame.pos(), ref_ftr_)){
     return false;
+  }    
 
+  // 檢查影像金字塔在當前 level 下，ref_ftr_ 所代表的特徵是否在 ref_ftr_ 所屬頁框的範圍內
+  // level 會做調整？？
   if(!ref_ftr_->frame->cam_->isInFrame(
-      ref_ftr_->px.cast<int>()/(1<<ref_ftr_->level), halfpatch_size_+2, ref_ftr_->level))
-    return false;
-
+    ref_ftr_->px.cast<int>()/(1<<ref_ftr_->level), halfpatch_size_+2, ref_ftr_->level)){
+      return false;
+    }
+  
+  // 計算參考相機到當前相機的仿射轉換矩陣 A_cur_ref
   // warp affine
+  // norm()：計算歐式距離
   warp::getWarpMatrixAffine(
       *ref_ftr_->frame->cam_, *cur_frame.cam_, ref_ftr_->px, ref_ftr_->f,
       (ref_ftr_->frame->pos() - pt.pos_).norm(),
       cur_frame.T_f_w_ * ref_ftr_->frame->T_f_w_.inverse(), ref_ftr_->level, A_cur_ref_);
+
+  // 計算仿射轉換矩陣的行列式數值小於 3 的 search_level
   search_level_ = warp::getBestSearchLevel(A_cur_ref_, Config::nPyrLevels()-1);
+
+  // 利用仿射轉換矩陣，更新 patch_with_border_ 的數值
   warp::warpAffine(A_cur_ref_, ref_ftr_->frame->img_pyr_[ref_ftr_->level], ref_ftr_->px,
                    ref_ftr_->level, search_level_, halfpatch_size_+1, patch_with_border_);
+
+  // 利用 patch_with_border_ 更新 patch_
   createPatchFromPatchWithBorder();
 
   // px_cur should be set
   Vector2d px_scaled(px_cur/(1<<search_level_));
 
   bool success = false;
+  
   if(ref_ftr_->type == Feature::EDGELET)
   {
     Vector2d dir_cur(A_cur_ref_*ref_ftr_->grad);
@@ -172,7 +213,9 @@ bool Matcher::findMatchDirect(
       cur_frame.img_pyr_[search_level_], patch_with_border_, patch_,
       options_.align_max_iter, px_scaled);
   }
+
   px_cur = px_scaled * (1<<search_level_);
+
   return success;
 }
 

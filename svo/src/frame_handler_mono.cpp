@@ -44,8 +44,11 @@ void FrameHandlerMono::initialize()
   feature_detection::DetectorPtr feature_detector(
       new feature_detection::FastDetector(
           cam_->width(), cam_->height(), Config::gridSize(), Config::nPyrLevels()));
+
   DepthFilter::callback_t depth_filter_cb = boost::bind(
       &MapPointCandidates::newCandidatePoint, &map_.point_candidates_, _1, _2);
+
+  // 使用 FastDetector 作為深度濾波器的特徵檢測器
   depth_filter_ = new DepthFilter(feature_detector, depth_filter_cb);
   depth_filter_->startThread();
 }
@@ -95,20 +98,28 @@ void FrameHandlerMono::addImage(const cv::Mat& img, const double timestamp)
   // set last frame
   last_frame_ = new_frame_;
   new_frame_.reset();
+
   // finish processing
   finishFrameProcessingCommon(last_frame_->id_, res, last_frame_->nObs());
 }
 
+// 處理第一張影像（尋找角點的位置與方向），並返回『更新結果 UpdateResult』
 FrameHandlerMono::UpdateResult FrameHandlerMono::processFirstFrame()
 {
   new_frame_->T_f_w_ = SE3(Matrix3d::Identity(), Vector3d::Zero());
 
+  // addFirstFrame：尋找角點的位置與方向
   if(klt_homography_init_.addFirstFrame(new_frame_) == initialization::FAILURE){
     return RESULT_NO_KEYFRAME;
   }
-    
+
+  // 將第一張影像設為關鍵幀 
   new_frame_->setKeyframe();
+
+  // 由 map_ 管理關鍵幀 
   map_.addKeyframe(new_frame_);
+
+  // 更新階段
   stage_ = STAGE_SECOND_FRAME;
   SVO_INFO_STREAM("Init: Selected first frame.");
   
@@ -117,48 +128,73 @@ FrameHandlerMono::UpdateResult FrameHandlerMono::processFirstFrame()
 
 FrameHandlerBase::UpdateResult FrameHandlerMono::processSecondFrame()
 {
+  // 根據第一二幀，找到兩幀之間相互對應的點，以及它們所對應的空間點。
+  // 利用深度的中位數來控制地圖規模，並使 Frame 和 Point* 管理著各自的 Feature
   initialization::InitResult res = klt_homography_init_.addSecondFrame(new_frame_);
-  if(res == initialization::FAILURE)
-    return RESULT_FAILURE;
-  else if(res == initialization::NO_KEYFRAME)
-    return RESULT_NO_KEYFRAME;
 
+  if(res == initialization::FAILURE){
+    return RESULT_FAILURE;
+  }    
+  else if(res == initialization::NO_KEYFRAME){
+    return RESULT_NO_KEYFRAME;
+  }
+  
   // two-frame bundle adjustment
+  // 優化兩頁框的位姿估計，以及空間點的估計，誤差過大的空間點則刪除
 #ifdef USE_BUNDLE_ADJUSTMENT
   ba::twoViewBA(new_frame_.get(), map_.lastKeyframe().get(), Config::lobaThresh(), &map_);
 #endif
 
+  // 將第二幀設為關鍵幀
   new_frame_->setKeyframe();
+
   double depth_mean, depth_min;
+
+  // 取深度的中位數，以及最小值
   frame_utils::getSceneDepth(*new_frame_, depth_mean, depth_min);
+
+  // 將關鍵幀加入 depth_filter_，用於優化深度估計，進而估計空間點的三維位置
   depth_filter_->addKeyframe(new_frame_, depth_mean, 0.5*depth_min);
 
   // add frame to map
   map_.addKeyframe(new_frame_);
+
+  // 更新 stage_
   stage_ = STAGE_DEFAULT_FRAME;
+
   klt_homography_init_.reset();
   SVO_INFO_STREAM("Init: Selected second frame, triangulated initial map.");
+
   return RESULT_IS_KEYFRAME;
 }
 
 FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
 {
   // Set initial pose TODO use prior
+  // 使用前一幀的位姿作為當前幀的位姿初始值
   new_frame_->T_f_w_ = last_frame_->T_f_w_;
 
   // sparse image align
   SVO_START_TIMER("sparse_img_align");
+
+  // 
   SparseImgAlign img_align(Config::kltMaxLevel(), Config::kltMinLevel(),
                            30, SparseImgAlign::GaussNewton, false, false);
+
+  // 透過非線性最小平方法（例如高斯牛頓法）最佳化當前幀的位姿估計
   size_t img_align_n_tracked = img_align.run(last_frame_, new_frame_);
+
   SVO_STOP_TIMER("sparse_img_align");
   SVO_LOG(img_align_n_tracked);
   SVO_DEBUG_STREAM("Img Align:\t Tracked = " << img_align_n_tracked);
 
   // map reprojection & feature alignment
   SVO_START_TIMER("reproject");
+  // 將地圖上的空間點透影回影像上，以尋找相關聯的 特徵/角點
+  // vector< pair<FramePtr,size_t> > overlap_kfs_;
   reprojector_.reprojectMap(new_frame_, overlap_kfs_);
   SVO_STOP_TIMER("reproject");
+
   const size_t repr_n_new_references = reprojector_.n_matches_;
   const size_t repr_n_mps = reprojector_.n_trials_;
   SVO_LOG2(repr_n_mps, repr_n_new_references);

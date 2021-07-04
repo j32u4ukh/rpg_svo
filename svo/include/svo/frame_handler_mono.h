@@ -64,12 +64,14 @@ protected:
   // Camera model, can be ATAN, Pinhole or Ocam (see vikit).
   vk::AbstractCamera* cam_;
   
-  Reprojector reprojector_;                     //!< Projects points from other keyframes into the current frame
+  // Projects points from other keyframes into the current frame
+  Reprojector reprojector_;                     
   
   // Current frame.
   FramePtr new_frame_;
   
-  FramePtr last_frame_;                         //!< Last frame, not necessarily a keyframe.
+  // Last frame, not necessarily a keyframe.
+  FramePtr last_frame_;                         
 
   // Keyframes in the closer neighbourhood.
   set<FramePtr> core_kfs_;
@@ -81,7 +83,8 @@ protected:
   // Used to estimate pose of the first two keyframes by estimating a homography.
   initialization::KltHomographyInit klt_homography_init_; 
 
-  DepthFilter* depth_filter_;                   //!< Depth estimation algorithm runs in a parallel thread and is used to initialize new 3D points.
+  // Depth estimation algorithm runs in a parallel thread and is used to initialize new 3D points.
+  DepthFilter* depth_filter_;                   
 
   /// Initialize the visual odometry algorithm.
   virtual void initialize();

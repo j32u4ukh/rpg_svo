@@ -2,18 +2,23 @@
 # user build settings
 
 SET(TRACE TRUE)
-SET(HAVE_G2O TRUE) 
-SET(USE_ROS FALSE) # Set FALSE if you want to build this package without Catkin
-SET(DEBUG_OUTPUT FALSE) # Only relevant if build without ROS
+SET(HAVE_G2O TRUE)
+
+# Set FALSE if you want to build this package without Catkin
+SET(USE_ROS FALSE) 
+
+# Only relevant if build without ROS
+SET(DEBUG_OUTPUT FALSE) 
 
 ################################################################################
-
+CMAKE_MINIMUM_REQUIRED (VERSION 2.8.3)
 SET(PROJECT_NAME svo)
 PROJECT(${PROJECT_NAME})
-CMAKE_MINIMUM_REQUIRED (VERSION 2.8.3)
+
 SET(CMAKE_BUILD_TYPE Release) # Release, RelWithDebInfo
 SET(CMAKE_VERBOSE_MAKEFILE OFF)
 SET(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${PROJECT_SOURCE_DIR}/CMakeModules/")
+list(APPEND CMAKE_MODULE_PATH "../../fast/")
 
 # Set definitions
 IF(TRACE)
@@ -32,18 +37,20 @@ ENDIF()
 # Set build flags, set ARM_ARCHITECTURE environment variable on Odroid
 # Set build flags. Set IS_ARM on odroid board as environment variable
 SET(CMAKE_CXX_FLAGS "-Wall -D_LINUX -D_REENTRANT -march=native -Wno-unused-variable -Wno-unused-but-set-variable -Wno-unknown-pragmas")
+
 IF(DEFINED ENV{ARM_ARCHITECTURE})
   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mfpu=neon -march=armv7-a")
 ELSE()
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmmx -msse -msse -msse2 -msse3 -mssse3")
+  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -mmmx -msse -msse -msse2 -msse3 -mssse3 -msse4")
 ENDIF()
 
-# 設定'編譯器版本'
-IF(CMAKE_COMPILER_IS_GNUCC)
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
-ELSE()
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-ENDIF()
+set(CMAKE_CXX_STANDARD 14)
+
+# IF(CMAKE_COMPILER_IS_GNUCC)
+#   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++0x")
+# ELSE()
+#   SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")  
+# ENDIF()
 
 SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS} -O3 -fsee -fomit-frame-pointer -fno-signed-zeros -fno-math-errno -funroll-loops")
 
@@ -152,3 +159,4 @@ TARGET_LINK_LIBRARIES(test_sparse_img_align svo)
 
 ADD_EXECUTABLE(test_pose_optimizer test/test_pose_optimizer.cpp)
 TARGET_LINK_LIBRARIES(test_pose_optimizer svo) 
+

@@ -23,14 +23,16 @@ namespace g2o {
 class EdgeProjectXYZ2UV;
 class SparseOptimizer;
 class VertexSE3Expmap;
-class VertexSBAPointXYZ;
+// class VertexSBAPointXYZ;
+class VertexPointXYZ;
 }
 
 namespace svo {
 
 typedef g2o::EdgeProjectXYZ2UV g2oEdgeSE3;
 typedef g2o::VertexSE3Expmap g2oFrameSE3;
-typedef g2o::VertexSBAPointXYZ g2oPoint;
+// typedef g2o::VertexSBAPointXYZ g2oPoint;
+typedef g2o::VertexPointXYZ g2oPoint; 
 
 class Frame;
 class Point;
