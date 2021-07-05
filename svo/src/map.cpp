@@ -82,16 +82,20 @@ void Map::removePtFrameRef(Frame* frame, Feature* ftr)
 void Map::safeDeletePoint(Point* pt)
 {
   // Delete references to mappoints in all keyframes
+  // 遍歷觀察到這個點 pt 的特徵點
   std::for_each(pt->obs_.begin(), pt->obs_.end(), [&](Feature* ftr){
     ftr->point=NULL;
     ftr->frame->removeKeyPoint(ftr);
   });
+
   pt->obs_.clear();
 
   // Delete mappoint
+  // 將該 pt 標注為 Point::TYPE_DELETED，並利用 trash_points_ 進行管理，在適當的時機再進行刪除
   deletePoint(pt);
 }
 
+// 將該 pt 標注為 Point::TYPE_DELETED，並利用 trash_points_ 進行管理，在適當的時機再進行刪除
 void Map::deletePoint(Point* pt)
 {
   pt->type_ = Point::TYPE_DELETED;

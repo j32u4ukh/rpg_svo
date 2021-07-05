@@ -71,12 +71,19 @@ void Frame::addFeature(Feature* ftr)
 
 void Frame::setKeyPoints()
 {
-  for(size_t i = 0; i < 5; ++i)
-    if(key_pts_[i] != NULL)
-      if(key_pts_[i]->point == NULL)
+  for(size_t i = 0; i < 5; ++i){
+    if(key_pts_[i] != NULL){
+      if(key_pts_[i]->point == NULL){
         key_pts_[i] = NULL;
-
-  std::for_each(fts_.begin(), fts_.end(), [&](Feature* ftr){ if(ftr->point != NULL) checkKeyPoints(ftr); });
+      }
+    }
+  }
+  
+  std::for_each(fts_.begin(), fts_.end(), [&](Feature* ftr){ 
+    if(ftr->point != NULL){
+      checkKeyPoints(ftr); 
+    }
+  });
 }
 
 void Frame::checkKeyPoints(Feature* ftr)
@@ -85,12 +92,14 @@ void Frame::checkKeyPoints(Feature* ftr)
   const int cv = cam_->height()/2;
 
   // center pixel
-  if(key_pts_[0] == NULL)
+  if(key_pts_[0] == NULL){
     key_pts_[0] = ftr;
+  }    
   else if(std::max(std::fabs(ftr->px[0]-cu), std::fabs(ftr->px[1]-cv))
-        < std::max(std::fabs(key_pts_[0]->px[0]-cu), std::fabs(key_pts_[0]->px[1]-cv)))
+        < std::max(std::fabs(key_pts_[0]->px[0]-cu), std::fabs(key_pts_[0]->px[1]-cv))){
     key_pts_[0] = ftr;
-
+  }
+  
   if(ftr->px[0] >= cu && ftr->px[1] >= cv)
   {
     if(key_pts_[1] == NULL)
@@ -128,14 +137,18 @@ void Frame::checkKeyPoints(Feature* ftr)
 void Frame::removeKeyPoint(Feature* ftr)
 {
   bool found = false;
+
   std::for_each(key_pts_.begin(), key_pts_.end(), [&](Feature*& i){
     if(i == ftr) {
       i = NULL;
       found = true;
     }
   });
-  if(found)
+
+  // 若找到要移除的 Feature
+  if(found){
     setKeyPoints();
+  }    
 }
 
 // 將點 xyz_w 轉換到相機座標系下，進而判斷相機能否看到該點（是否在相機的前面，且在成像平面的投影範圍內）

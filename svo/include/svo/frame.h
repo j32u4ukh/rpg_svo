@@ -63,7 +63,10 @@ public:
   // List of features in the image.
   Features                      fts_;
   
-  vector<Feature*>              key_pts_;               //!< Five features and associated 3D points which are used to detect if two frames have overlapping field of view.
+  // Five features and associated 3D points which are used to detect 
+  // if two frames have overlapping field of view.
+  vector<Feature*> key_pts_;
+  
   bool                          is_keyframe_;           //!< Was this frames selected as keyframe?
   g2oFrameSE3*                  v_kf_;                  //!< Temporary pointer to the g2o node object of the keyframe.
   int                           last_published_ts_;     //!< Timestamp of last publishing.
