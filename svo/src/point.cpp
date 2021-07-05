@@ -144,31 +144,41 @@ void Point::optimize(const size_t n_iter)
 {
   Vector3d old_point = pos_;
   double chi2 = 0.0;
-  Matrix3d A;
+  Matrix3d H;
   Vector3d b;
 
   for(size_t i=0; i<n_iter; i++)
   {
-    A.setZero();
+    H.setZero();
     b.setZero();
     double new_chi2 = 0.0;
 
-    // compute residuals
+    // compute residuals，遍歷每個 Feature*
     for(auto it=obs_.begin(); it!=obs_.end(); ++it)
     {
       Matrix23d J;
+
+      // 當前這個點，轉換到含有『特徵 it』的相機座標系下
       const Vector3d p_in_f((*it)->frame->T_f_w_ * pos_);
       Point::jacobian_xyz2uv(p_in_f, (*it)->frame->T_f_w_.rotation_matrix(), J);
+
+      // 像素座標誤差 e：成像平面上的 (u, v) 和 實際測量值 相減
       const Vector2d e(vk::project2d((*it)->f) - vk::project2d(p_in_f));
       new_chi2 += e.squaredNorm();
-      A.noalias() += J.transpose() * J;
+
+      /* noalias()
+      在 Eigen 中，當變量同時出現在左值和右值，賦值操作可能會帶來混淆問題。一般的操作，Eigen 默認都是存在混淆的。
+      所以 Eigen 對矩陣乘法自動引入了臨時變量，對的 matA = matA * matA 這是必須的，
+      但是對 matB = matA * matA 這樣便是不必要的了。我們可以使用 noalias() 函數來聲明這里沒有混淆，
+      matA * matA 的結果可以直接賦值為 matB。matB.noalias() = matA * matA;*/
+      H.noalias() += J.transpose() * J;
       b.noalias() -= J.transpose() * e;
     }
 
-    // solve linear system
-    const Vector3d dp(A.ldlt().solve(b));
+    // solve linear system H * dp = b
+    const Vector3d dp(H.ldlt().solve(b));
 
-    // check if error increased
+    // check if error increased(第一次不納入)
     if((i > 0 && new_chi2 > chi2) || (bool) std::isnan((double)dp[0]))
     {
 #ifdef POINT_OPTIMIZER_DEBUG
@@ -183,7 +193,10 @@ void Point::optimize(const size_t n_iter)
     Vector3d new_point = pos_ + dp;
     old_point = pos_;
     pos_ = new_point;
+
+    // 更新 chi2，將被用於檢查誤差是否變大
     chi2 = new_chi2;
+
 #ifdef POINT_OPTIMIZER_DEBUG
     cout << "it " << i
          << "\t Success \t new_chi2 = " << new_chi2
@@ -191,9 +204,12 @@ void Point::optimize(const size_t n_iter)
          << endl;
 #endif
 
+    // 若更新幅度極小，提前結束優化
     // stop when converged
-    if(vk::norm_max(dp) <= EPS)
+    if(vk::norm_max(dp) <= EPS){
       break;
+    }
+      
   }
 #ifdef POINT_OPTIMIZER_DEBUG
   cout << endl;

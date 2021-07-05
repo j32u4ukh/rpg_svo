@@ -4,6 +4,12 @@
         "array": "cpp",
         "string": "cpp",
         "string_view": "cpp",
-        "memory_resource": "cpp"
+        "memory_resource": "cpp",
+        "list": "cpp",
+        "*.tcc": "cpp",
+        "deque": "cpp",
+        "unordered_map": "cpp",
+        "initializer_list": "cpp",
+        "*.ipp": "cpp"
     }
 }

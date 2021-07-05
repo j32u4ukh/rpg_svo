@@ -199,10 +199,15 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
   const size_t repr_n_mps = reprojector_.n_trials_;
   SVO_LOG2(repr_n_mps, repr_n_new_references);
   SVO_DEBUG_STREAM("Reprojection:\t nPoints = "<<repr_n_mps<<"\t \t nMatches = "<<repr_n_new_references);
+  
+  // 若成功重投影的特徵點數過少
   if(repr_n_new_references < Config::qualityMinFts())
   {
     SVO_WARN_STREAM_THROTTLE(1.0, "Not enough matched features.");
-    new_frame_->T_f_w_ = last_frame_->T_f_w_; // reset to avoid crazy pose jumps
+
+    // reset to avoid crazy pose jumps
+    new_frame_->T_f_w_ = last_frame_->T_f_w_; 
+
     tracking_quality_ = TRACKING_INSUFFICIENT;
     return RESULT_FAILURE;
   }
@@ -215,12 +220,16 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
       Config::poseOptimThresh(), Config::poseOptimNumIter(), false,
       new_frame_, sfba_thresh, sfba_error_init, sfba_error_final, sfba_n_edges_final);
   SVO_STOP_TIMER("pose_optimizer");
+
   SVO_LOG4(sfba_thresh, sfba_error_init, sfba_error_final, sfba_n_edges_final);
   SVO_DEBUG_STREAM("PoseOptimizer:\t ErrInit = "<<sfba_error_init<<"px\t thresh = "<<sfba_thresh);
-  SVO_DEBUG_STREAM("PoseOptimizer:\t ErrFin. = "<<sfba_error_final<<"px\t nObsFin. = "<<sfba_n_edges_final);
-  if(sfba_n_edges_final < 20)
-    return RESULT_FAILURE;
+  SVO_DEBUG_STREAM("PoseOptimizer:\t ErrFin. = "<<sfba_error_final<<"px\t nObsFin. = "<<
+  sfba_n_edges_final);
 
+  if(sfba_n_edges_final < 20){
+    return RESULT_FAILURE;
+  }
+    
   // structure optimization
   SVO_START_TIMER("point_optimizer");
   optimizeStructure(new_frame_, Config::structureOptimMaxPts(), Config::structureOptimNumIter());

@@ -189,13 +189,19 @@ void FrameHandlerBase::optimizeStructure(
     int max_iter)
 {
   deque<Point*> pts;
+
   for(Features::iterator it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
   {
-    if((*it)->point != NULL)
+    if((*it)->point != NULL){
       pts.push_back((*it)->point);
+    }      
   }
+
   max_n_pts = min(max_n_pts, pts.size());
+
+  // pts 的 begin 到 end 之間找第 max_n_pts 個，以 ptLastOptimComparator 來排序
   nth_element(pts.begin(), pts.begin() + max_n_pts, pts.end(), ptLastOptimComparator);
+  
   for(deque<Point*>::iterator it=pts.begin(); it!=pts.begin()+max_n_pts; ++it)
   {
     (*it)->optimize(max_iter);

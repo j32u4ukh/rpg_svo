@@ -283,15 +283,30 @@ void MapPointCandidates::addCandidatePointToFrame(FramePtr frame)
 bool MapPointCandidates::deleteCandidatePoint(Point* point)
 {
   boost::unique_lock<boost::mutex> lock(mut_);
+
+  // PointCandidateList candidates_ 包含多個 PointCandidate
+  // 又 typedef pair<Point*, Feature*> PointCandidate;
   for(auto it=candidates_.begin(), ite=candidates_.end(); it!=ite; ++it)
   {
+    // it->first 為 Point*
     if(it->first == point)
     {
       deleteCandidate(*it);
+
+      /* list 中 remove 和 erase 都是刪除一個元素，其中 remove 引數型別和資料型別一致，而 erase 引數型別是迭代器。
+      remove（aim）是刪除連結串列中的 aim 元素，若有多個 aim，都會刪除，而
+      erase（it）是刪除迭代器指定位置的元素，並且返回下一個位置的迭代器。
+      erase 還能透過指定刪除迭代器的起點和終點，一次刪除多筆數據。
+
+      參考：
+      https://www.itread01.com/content/1556144404.html
+      https://www.cplusplus.com/reference/list/list/erase/
+      */
       candidates_.erase(it);
       return true;
     }
   }
+
   return false;
 }
 
@@ -323,9 +338,11 @@ void MapPointCandidates::reset()
 
 void MapPointCandidates::deleteCandidate(PointCandidate& c)
 {
+  // 其他頁框可能仍指向這個 PointCandidate，因此上不能直接將它刪除，而是對它進行標注要刪除
   // camera-rig: another frame might still be pointing to the candidate point
   // therefore, we can't delete it right now.
-  delete c.second; c.second=NULL;
+  delete c.second; 
+  c.second=NULL;
   c.first->type_ = Point::TYPE_DELETED;
   trash_points_.push_back(c.first);
 }

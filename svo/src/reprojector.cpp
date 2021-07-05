@@ -194,6 +194,7 @@ bool Reprojector::pointQualityComparator(Candidate& lhs, Candidate& rhs)
   return false;
 }
 
+// 每個 Cell 至多形成一個重投影
 bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
 {
   // 根據 cell 品質排序
@@ -230,13 +231,16 @@ bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
       if(it->pt->type_ == Point::TYPE_CANDIDATE  && it->pt->n_failed_reproj_ > 30){
         map_.point_candidates_.deleteCandidatePoint(it->pt);
       }
-        
+      
+      // erase（it）是刪除迭代器指定位置的元素，並且返回下一個位置的迭代器。
       it = cell.erase(it);
+
       continue;
     }
 
     it->pt->n_succeeded_reproj_++;
 
+    // n_succeeded_reproj_ 成功重投影的次數，若大於 10，表示這個點的品質很好
     if(it->pt->type_ == Point::TYPE_UNKNOWN && it->pt->n_succeeded_reproj_ > 10){
       it->pt->type_ = Point::TYPE_GOOD;
     }      
@@ -244,6 +248,7 @@ bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
     Feature* new_feature = new Feature(frame.get(), it->px, matcher_.search_level_);
     frame->addFeature(new_feature);
 
+    // 此處將特徵 和 其所觀察到的空間點 作連結，一般只會在頁框被認定為 keyframe 時操作
     // Here we add a reference in the feature to the 3D point, the other way
     // round is only done if this frame is selected as keyframe.
     new_feature->point = it->pt;
@@ -262,6 +267,7 @@ bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
     // Maximum one point per cell.
     return true;
   }
+
   return false;
 }
 

@@ -45,17 +45,23 @@ void optimizeGaussNewton(
 
   // compute the scale of the error for robust estimation
   std::vector<float> errors; errors.reserve(frame->fts_.size());
+
   for(auto it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
   {
-    if((*it)->point == NULL)
+    if((*it)->point == NULL){
       continue;
+    }
+      
     Vector2d e = vk::project2d((*it)->f)
                - vk::project2d(frame->T_f_w_ * (*it)->point->pos_);
     e *= 1.0 / (1<<(*it)->level);
     errors.push_back(e.norm());
   }
-  if(errors.empty())
+
+  if(errors.empty()){
     return;
+  }
+    
   vk::robust_cost::MADScaleEstimator scale_estimator;
   estimated_scale = scale_estimator.compute(errors);
 
@@ -63,12 +69,14 @@ void optimizeGaussNewton(
   chi2_vec_init.reserve(num_obs);
   chi2_vec_final.reserve(num_obs);
   double scale = estimated_scale;
+
   for(size_t iter=0; iter<n_iter; iter++)
   {
     // overwrite scale
-    if(iter == 5)
+    if(iter == 5){
       scale = 0.85/frame->cam_->errorMultiplier2();
-
+    }
+    
     b.setZero();
     A.setZero();
     double new_chi2(0.0);
@@ -76,16 +84,22 @@ void optimizeGaussNewton(
     // compute residual
     for(auto it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
     {
-      if((*it)->point == NULL)
+      if((*it)->point == NULL){
         continue;
+      }
+        
       Matrix26d J;
       Vector3d xyz_f(frame->T_f_w_ * (*it)->point->pos_);
       Frame::jacobian_xyz2uv(xyz_f, J);
       Vector2d e = vk::project2d((*it)->f) - vk::project2d(xyz_f);
       double sqrt_inv_cov = 1.0 / (1<<(*it)->level);
       e *= sqrt_inv_cov;
-      if(iter == 0)
-        chi2_vec_init.push_back(e.squaredNorm()); // just for debug
+
+      if(iter == 0){
+        // just for debug
+        chi2_vec_init.push_back(e.squaredNorm()); 
+      }
+        
       J *= sqrt_inv_cov;
       double weight = weight_function.value(e.norm()/scale);
       A.noalias() += J.transpose()*J*weight;
@@ -99,10 +113,14 @@ void optimizeGaussNewton(
     // check if error increased
     if((iter > 0 && new_chi2 > chi2) || (bool) std::isnan((double)dT[0]))
     {
-      if(verbose)
+      if(verbose){
         std::cout << "it " << iter
                   << "\t FAILURE \t new_chi2 = " << new_chi2 << std::endl;
-      frame->T_f_w_ = T_old; // roll-back
+      }
+      
+      // roll-back
+      frame->T_f_w_ = T_old; 
+
       break;
     }
 
@@ -111,14 +129,17 @@ void optimizeGaussNewton(
     T_old = frame->T_f_w_;
     frame->T_f_w_ = T_new;
     chi2 = new_chi2;
-    if(verbose)
+
+    if(verbose){
       std::cout << "it " << iter
                 << "\t Success \t new_chi2 = " << new_chi2
                 << "\t norm(dT) = " << vk::norm_max(dT) << std::endl;
+    }
 
     // stop when converged
-    if(vk::norm_max(dT) <= EPS)
+    if(vk::norm_max(dT) <= EPS){
       break;
+    }      
   }
 
   // Set covariance as inverse information matrix. Optimistic estimator!
@@ -128,14 +149,18 @@ void optimizeGaussNewton(
   // Remove Measurements with too large reprojection error
   double reproj_thresh_scaled = reproj_thresh / frame->cam_->errorMultiplier2();
   size_t n_deleted_refs = 0;
+
   for(Features::iterator it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
   {
-    if((*it)->point == NULL)
+    if((*it)->point == NULL){
       continue;
+    }
+      
     Vector2d e = vk::project2d((*it)->f) - vk::project2d(frame->T_f_w_ * (*it)->point->pos_);
     double sqrt_inv_cov = 1.0 / (1<<(*it)->level);
     e *= sqrt_inv_cov;
     chi2_vec_final.push_back(e.squaredNorm());
+
     if(e.norm() > reproj_thresh_scaled)
     {
       // we don't need to delete a reference in the point since it was not created yet
@@ -146,17 +171,24 @@ void optimizeGaussNewton(
 
   error_init=0.0;
   error_final=0.0;
-  if(!chi2_vec_init.empty())
-    error_init = sqrt(vk::getMedian(chi2_vec_init))*frame->cam_->errorMultiplier2();
-  if(!chi2_vec_final.empty())
-    error_final = sqrt(vk::getMedian(chi2_vec_final))*frame->cam_->errorMultiplier2();
 
+  if(!chi2_vec_init.empty()){
+    error_init = sqrt(vk::getMedian(chi2_vec_init))*frame->cam_->errorMultiplier2();
+  }
+    
+  if(!chi2_vec_final.empty()){
+    error_final = sqrt(vk::getMedian(chi2_vec_final))*frame->cam_->errorMultiplier2();
+  }
+  
   estimated_scale *= frame->cam_->errorMultiplier2();
-  if(verbose)
+
+  if(verbose){
     std::cout << "n deleted obs = " << n_deleted_refs
               << "\t scale = " << estimated_scale
               << "\t error init = " << error_init
               << "\t error end = " << error_final << std::endl;
+  }
+    
   num_obs -= n_deleted_refs;
 }
 
