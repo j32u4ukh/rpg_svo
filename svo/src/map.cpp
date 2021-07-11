@@ -261,22 +261,30 @@ void MapPointCandidates::newCandidatePoint(Point* point, double depth_sigma2)
   candidates_.push_back(PointCandidate(point, point->obs_.front()));
 }
 
+// 將候選點產生的特徵點，加入該特徵點的頁框的特徵點（it->second->frame->addFeature(it->second)）
 void MapPointCandidates::addCandidatePointToFrame(FramePtr frame)
 {
   boost::unique_lock<boost::mutex> lock(mut_);
   PointCandidateList::iterator it=candidates_.begin();
+
+  // it typedef pair<Point*, Feature*> PointCandidate;
   while(it != candidates_.end())
   {
+    // it->first Point*
     if(it->first->obs_.front()->frame == frame.get())
     {
       // insert feature in the frame
       it->first->type_ = Point::TYPE_UNKNOWN;
       it->first->n_failed_reproj_ = 0;
+
+      // it->second Feature*
       it->second->frame->addFeature(it->second);
+
       it = candidates_.erase(it);
     }
-    else
+    else{
       ++it;
+    }      
   }
 }
 

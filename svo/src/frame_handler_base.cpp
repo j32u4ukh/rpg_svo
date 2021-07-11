@@ -134,8 +134,7 @@ int FrameHandlerBase::finishFrameProcessingCommon(
   }
 #endif
 
-  if(dropout == RESULT_FAILURE &&
-      (stage_ == STAGE_DEFAULT_FRAME || stage_ == STAGE_RELOCALIZING ))
+  if(dropout == RESULT_FAILURE && (stage_ == STAGE_DEFAULT_FRAME || stage_ == STAGE_RELOCALIZING ))
   {
     stage_ = STAGE_RELOCALIZING;
     tracking_quality_ = TRACKING_INSUFFICIENT;
@@ -165,12 +164,18 @@ void FrameHandlerBase::resetCommon()
 void FrameHandlerBase::setTrackingQuality(const size_t num_observations)
 {
   tracking_quality_ = TRACKING_GOOD;
+
   if(num_observations < Config::qualityMinFts())
   {
     SVO_WARN_STREAM_THROTTLE(0.5, "Tracking less than "<< Config::qualityMinFts() <<" features!");
     tracking_quality_ = TRACKING_INSUFFICIENT;
   }
-  const int feature_drop = static_cast<int>(std::min(num_obs_last_, Config::maxFts())) - num_observations;
+
+  // 較前一幀觀察到的特徵數量（或最大要求特徵數） 少了多少特徵
+  const int feature_drop = 
+    static_cast<int>(std::min(num_obs_last_, Config::maxFts())) - num_observations;
+  
+  // 若比前一幀觀察到的數量還要少很多
   if(feature_drop > Config::qualityMaxFtsDrop())
   {
     SVO_WARN_STREAM("Lost "<< feature_drop <<" features!");

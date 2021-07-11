@@ -72,13 +72,14 @@ void Reprojector::resetGrid()
   });
 }
 
-// 對鄰近頁框與地圖中可被當前頁框觀測到的點進行重投影
+// 對鄰近頁框與地圖中可被當前頁框觀測到的點進行重投影到新加入的頁框
 void Reprojector::reprojectMap(
     FramePtr frame,
     std::vector< std::pair<FramePtr,std::size_t> >& overlap_kfs)
 {
   resetGrid();
 
+  /// NOTE: 將當前頁框附近的頁框，和當前頁框觀察到相同的空間點，用於最小化重投影誤差
   // Identify those Keyframes which share a common field of view.
   SVO_START_TIMER("reproject_kfs");
   list< pair<FramePtr,double> > close_kfs;
@@ -96,7 +97,7 @@ void Reprojector::reprojectMap(
   size_t n = 0;
   overlap_kfs.reserve(options_.max_n_kfs);
 
-  // 遍歷與當前頁框相近的頁框們（只遍歷最接近的前 options_.max_n_kfs 個）
+  // 遍歷與當前頁框相近的前 options_.max_n_kfs 個頁框們
   for(auto it_frame=close_kfs.begin(), ite_frame=close_kfs.end();
       it_frame!=ite_frame && n < options_.max_n_kfs; ++it_frame, ++n)
   {
@@ -131,6 +132,45 @@ void Reprojector::reprojectMap(
   }
   SVO_STOP_TIMER("reproject_kfs");
 
+  /// NOTE: 將可以投影到當前頁框的（候選）空間估計點（若空間點的估計已收斂，則會加入地圖中不再進行估計），
+  /// 用於最小化重投影誤差。  
+  /// TODO: 和前一步驟中的空間估計點應該是（可能）不完全相同，因為前面的那些點不見得都有被設為候選點
+  /* Candidate of reprojector / MapPointCandidates of map
+
+  struct Candidate {
+    EIGEN_MAKE_ALIGNED_OPERATOR_NEW
+
+    // 3D point.
+    Point* pt;       
+
+    // projected 2D pixel location.
+    Vector2d px;     
+
+    Candidate(Point* pt, Vector2d& px) : pt(pt), px(px) {}
+  };
+
+  // Cell 包含多個候選的點
+  typedef std::list<Candidate > Cell;
+
+  // CandidateGrid 為多個 Cell*
+  typedef std::vector<Cell*> CandidateGrid;
+
+  // Cell 包含多個候選的點，其中只會去配對一個點來作為 特徵/角點
+  struct Grid
+  {
+    CandidateGrid cells;
+    vector<int> cell_order;
+    int cell_size;
+    int grid_n_cols;
+    int grid_n_rows;
+  };
+
+  ==================================================
+
+  class MapPointCandidates
+  typedef pair<Point*, Feature*> PointCandidate;
+  typedef list<PointCandidate> PointCandidateList;
+  */
   // Now project all point candidates
   SVO_START_TIMER("reproject_candidates");
   {
@@ -155,12 +195,16 @@ void Reprojector::reprojectMap(
 
           // 取得下一個 PointCandidate 的指標
           it = map_.point_candidates_.candidates_.erase(it);
+
           continue;
         }
       }
+
       ++it;
     }
-  } // unlock the mutex when out of scope
+  } 
+  /// NOTE: unlock the mutex when out of scope
+
   SVO_STOP_TIMER("reproject_candidates");
 
   // Now we go through each grid cell and select one point to match.
@@ -274,9 +318,11 @@ bool Reprojector::reprojectCell(Cell& cell, FramePtr frame)
 // 檢查 point 是否在 frame 的成像平面上，若在就將該空間點與其投影位置封裝成 Candidate，由 Grid 來管理
 bool Reprojector::reprojectPoint(FramePtr frame, Point* point)
 {
+  // 將 ref_frame 觀察到的空間點（為世界座標，因此無須進行位姿轉換）投影到 cur_frame 的成像平面上的像素點
   // point 由世界座標轉換到相機座標
   Vector2d px(frame->w2c(point->pos_));
 
+  // 若投影後的像素點，在頁框的範圍內
   // 8px is the patch size in the matcher
   if(frame->cam_->isInFrame(px.cast<int>(), 8)) 
   {
@@ -284,6 +330,7 @@ bool Reprojector::reprojectPoint(FramePtr frame, Point* point)
     const int k = static_cast<int>(px[1]/grid_.cell_size) * grid_.grid_n_cols
                 + static_cast<int>(px[0]/grid_.cell_size);
 
+    // 將該像素點形成候選點，將用於估計深度
     grid_.cells.at(k)->push_back(Candidate(point, px));
 
     return true;

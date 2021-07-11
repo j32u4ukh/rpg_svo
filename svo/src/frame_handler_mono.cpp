@@ -209,6 +209,7 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
     new_frame_->T_f_w_ = last_frame_->T_f_w_; 
 
     tracking_quality_ = TRACKING_INSUFFICIENT;
+    
     return RESULT_FAILURE;
   }
 
@@ -238,6 +239,7 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
   // select keyframe
   core_kfs_.insert(new_frame_);
   setTrackingQuality(sfba_n_edges_final);
+
   if(tracking_quality_ == TRACKING_INSUFFICIENT)
   {
     new_frame_->T_f_w_ = last_frame_->T_f_w_; // reset to avoid crazy pose jumps
@@ -245,18 +247,26 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
   }
   double depth_mean, depth_min;
   frame_utils::getSceneDepth(*new_frame_, depth_mean, depth_min);
+
+  // 檢查是否需要增加 keyframe
   if(!needNewKf(depth_mean) || tracking_quality_ == TRACKING_BAD)
   {
+    // 若不需要，將當前頁框加入深度濾波器
     depth_filter_->addFrame(new_frame_);
+
     return RESULT_NO_KEYFRAME;
   }
+
   new_frame_->setKeyframe();
   SVO_DEBUG_STREAM("New keyframe selected.");
 
   // new keyframe selected
-  for(Features::iterator it=new_frame_->fts_.begin(); it!=new_frame_->fts_.end(); ++it)
-    if((*it)->point != NULL)
+  for(Features::iterator it=new_frame_->fts_.begin(); it!=new_frame_->fts_.end(); ++it){
+    if((*it)->point != NULL){
       (*it)->point->addFrameRef(*it);
+    }
+  }    
+      
   map_.point_candidates_.addCandidatePointToFrame(new_frame_);
 
   // optional bundle adjustment
@@ -264,12 +274,16 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
   if(Config::lobaNumIter() > 0)
   {
     SVO_START_TIMER("local_ba");
+
+    // 排序 overlap_kfs_，並將排序後的頁框的指標存入 core_kfs_
     setCoreKfs(Config::coreNKfs());
+
     size_t loba_n_erredges_init, loba_n_erredges_fin;
     double loba_err_init, loba_err_fin;
     ba::localBA(new_frame_.get(), &core_kfs_, &map_,
                 loba_n_erredges_init, loba_n_erredges_fin,
                 loba_err_init, loba_err_fin);
+                
     SVO_STOP_TIMER("local_ba");
     SVO_LOG4(loba_n_erredges_init, loba_n_erredges_fin, loba_err_init, loba_err_fin);
     SVO_DEBUG_STREAM("Local BA:\t RemovedEdges {"<<loba_n_erredges_init<<", "<<loba_n_erredges_fin<<"} \t "
@@ -284,7 +298,10 @@ FrameHandlerBase::UpdateResult FrameHandlerMono::processFrame()
   if(Config::maxNKfs() > 2 && map_.size() >= Config::maxNKfs())
   {
     FramePtr furthest_frame = map_.getFurthestKeyframe(new_frame_->pos());
-    depth_filter_->removeKeyframe(furthest_frame); // TODO this interrupts the mapper thread, maybe we can solve this better
+
+    // TODO this interrupts the mapper thread, maybe we can solve this better
+    depth_filter_->removeKeyframe(furthest_frame); 
+
     map_.safeDeleteFrame(furthest_frame);
   }
 
@@ -299,26 +316,35 @@ FrameHandlerMono::UpdateResult FrameHandlerMono::relocalizeFrame(
     FramePtr ref_keyframe)
 {
   SVO_WARN_STREAM_THROTTLE(1.0, "Relocalizing frame");
+
   if(ref_keyframe == nullptr)
   {
     SVO_INFO_STREAM("No reference keyframe.");
     return RESULT_FAILURE;
   }
+
   SparseImgAlign img_align(Config::kltMaxLevel(), Config::kltMinLevel(),
                            30, SparseImgAlign::GaussNewton, false, false);
   size_t img_align_n_tracked = img_align.run(ref_keyframe, new_frame_);
+
   if(img_align_n_tracked > 30)
   {
     SE3 T_f_w_last = last_frame_->T_f_w_;
     last_frame_ = ref_keyframe;
+
+    // 將最近的 keyframe 視為前一幀，進行 processFrame 批配
     FrameHandlerMono::UpdateResult res = processFrame();
+
     if(res != RESULT_FAILURE)
     {
       stage_ = STAGE_DEFAULT_FRAME;
       SVO_INFO_STREAM("Relocalization successful.");
     }
-    else
-      new_frame_->T_f_w_ = T_f_w_last; // reset to last well localized pose
+    else{
+      // reset to last well localized pose
+      new_frame_->T_f_w_ = T_f_w_last; 
+    }
+      
     return res;
   }
   return RESULT_FAILURE;
@@ -366,21 +392,30 @@ bool FrameHandlerMono::needNewKf(double scene_depth_mean)
   for(auto it=overlap_kfs_.begin(), ite=overlap_kfs_.end(); it!=ite; ++it)
   {
     Vector3d relpos = new_frame_->w2f(it->first->pos());
+
     if(fabs(relpos.x())/scene_depth_mean < Config::kfSelectMinDist() &&
        fabs(relpos.y())/scene_depth_mean < Config::kfSelectMinDist()*0.8 &&
-       fabs(relpos.z())/scene_depth_mean < Config::kfSelectMinDist()*1.3)
-      return false;
+       fabs(relpos.z())/scene_depth_mean < Config::kfSelectMinDist()*1.3){
+         return false;
+       }
   }
+
   return true;
 }
 
+// 排序 overlap_kfs_，並將排序後的頁框的指標存入 core_kfs_
 void FrameHandlerMono::setCoreKfs(size_t n_closest)
 {
   size_t n = min(n_closest, overlap_kfs_.size()-1);
+
+  // vector< pair<FramePtr,size_t> > overlap_kfs_; 
   std::partial_sort(overlap_kfs_.begin(), overlap_kfs_.begin()+n, overlap_kfs_.end(),
                     boost::bind(&pair<FramePtr, size_t>::second, _1) >
                     boost::bind(&pair<FramePtr, size_t>::second, _2));
-  std::for_each(overlap_kfs_.begin(), overlap_kfs_.end(), [&](pair<FramePtr,size_t>& i){ core_kfs_.insert(i.first); });
+
+  std::for_each(overlap_kfs_.begin(), overlap_kfs_.end(), [&](pair<FramePtr,size_t>& i){ 
+    core_kfs_.insert(i.first); 
+  });
 }
 
 } // namespace svo

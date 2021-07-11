@@ -31,22 +31,40 @@ class Frame;
 class Feature;
 class Point;
 
+// Seed：單一像素的深度估計 struct
 /// A seed is a probabilistic depth estimate for a single pixel.
 struct Seed
 {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
+  // 這兩個為靜態變數
   static int batch_counter;
   static int seed_counter;
+
   int batch_id;                //!< Batch id is the id of the keyframe for which the seed was created.
   int id;                      //!< Seed ID, only used for visualization.
-  Feature* ftr;                //!< Feature in the keyframe for which the depth should be computed.
-  float a;                     //!< a of Beta distribution: When high, probability of inlier is large.
-  float b;                     //!< b of Beta distribution: When high, probability of outlier is large.
-  float mu;                    //!< Mean of normal distribution.
-  float z_range;               //!< Max range of the possible depth.
-  float sigma2;                //!< Variance of normal distribution.
-  Matrix2d patch_cov;          //!< Patch covariance in reference image.
+
+  // 關鍵頁框中要被計算深度的特徵 Feature in the keyframe for which the depth should be computed.
+  Feature* ftr;
+  
+  // a of Beta distribution: When high, probability of inlier is large.
+  float a;                     
+
+  // b of Beta distribution: When high, probability of outlier is large
+  float b;                     
+
+  // Mean of normal distribution. 對單一像素深度的估計，假設其服從常態分佈
+  float mu; 
+
+  // Max range of the possible depth.
+  float z_range;
+  
+  // Variance of normal distribution.
+  float sigma2;
+
+  // Patch covariance in reference image.
+  Matrix2d patch_cov;          
+
   Seed(Feature* ftr, float depth_mean, float depth_min);
 };
 
@@ -139,7 +157,10 @@ protected:
   feature_detection::DetectorPtr feature_detector_;
 
   callback_t seed_converged_cb_;
+
+  // Seed：單一像素的深度估計 struct
   std::list<Seed> seeds_;
+
   boost::mutex seeds_mut_;
   bool seeds_updating_halt_;            //!< Set this value to true when seeds updating should be interrupted.
   boost::thread* thread_;

@@ -55,7 +55,13 @@ size_t SparseImgAlign::run(FramePtr ref_frame, FramePtr cur_frame)
 
   ref_frame_ = ref_frame;
   cur_frame_ = cur_frame;
+
+  // (特徵數, 16)
   ref_patch_cache_ = cv::Mat(ref_frame_->fts_.size(), patch_area_, CV_32F);
+
+  /// NOTE: 硬塑形的用例：M 未被初始化，聲明時也未指定尺寸，在準備用移 位運算符給 M 賦值前必須用 resize() 指定大小，
+  /// 否則存在前述元素數不匹配問題，引起閃退。如果某個尺寸保持不變，僅變動另一尺寸，可將不作改變的尺寸
+  /// 以 Eigen::NoChange 代替；此時所有數據亦丟失。
   jacobian_cache_.resize(Eigen::NoChange, ref_patch_cache_.rows*patch_area_);
 
   // TODO: should it be reset at each level?
@@ -72,7 +78,8 @@ size_t SparseImgAlign::run(FramePtr ref_frame, FramePtr cur_frame)
     if(verbose_){
       printf("\nPYRAMID LEVEL %i\n---------------\n", level_);
     }
-      
+    
+    // 最佳化位姿估計
     optimize(T_cur_from_ref);
   }
 
@@ -98,6 +105,8 @@ void SparseImgAlign::precomputeReferencePatches()
   const double focal_length = ref_frame_->cam_->errorMultiplier2();
   size_t feature_counter = 0;
   std::vector<bool>::iterator visiblity_it = visible_fts_.begin();
+
+  // 遍歷 Feature*
   for(auto it=ref_frame_->fts_.begin(), ite=ref_frame_->fts_.end();
       it!=ite; ++it, ++feature_counter, ++visiblity_it)
   {
@@ -106,11 +115,16 @@ void SparseImgAlign::precomputeReferencePatches()
     const float v_ref = (*it)->px[1]*scale;
     const int u_ref_i = floorf(u_ref);
     const int v_ref_i = floorf(v_ref);
-    if((*it)->point == NULL || u_ref_i-border < 0 || v_ref_i-border < 0 || u_ref_i+border >= ref_img.cols || v_ref_i+border >= ref_img.rows)
+
+    if((*it)->point == NULL || u_ref_i-border < 0 || v_ref_i-border < 0 || 
+    u_ref_i+border >= ref_img.cols || v_ref_i+border >= ref_img.rows){
       continue;
+    }
+    
     *visiblity_it = true;
 
-    // cannot just take the 3d points coordinate because of the reprojection errors in the reference image!!!
+    // cannot just take the 3d points coordinate because of the reprojection errors 
+    // in the reference image!!!
     const double depth(((*it)->point->pos_ - ref_pos).norm());
     const Vector3d xyz_ref((*it)->f*depth);
 
@@ -127,9 +141,12 @@ void SparseImgAlign::precomputeReferencePatches()
     const float w_ref_br = subpix_u_ref * subpix_v_ref;
     size_t pixel_counter = 0;
     float* cache_ptr = reinterpret_cast<float*>(ref_patch_cache_.data) + patch_area_*feature_counter;
+
     for(int y=0; y<patch_size_; ++y)
     {
-      uint8_t* ref_img_ptr = (uint8_t*) ref_img.data + (v_ref_i+y-patch_halfsize_)*stride + (u_ref_i-patch_halfsize_);
+      uint8_t* ref_img_ptr = (uint8_t*) ref_img.data + (v_ref_i+y-patch_halfsize_)*stride + 
+      (u_ref_i-patch_halfsize_);
+
       for(int x=0; x<patch_size_; ++x, ++ref_img_ptr, ++cache_ptr, ++pixel_counter)
       {
         // precompute interpolated reference patch color
@@ -148,9 +165,11 @@ void SparseImgAlign::precomputeReferencePatches()
       }
     }
   }
+
   have_ref_patch_cache_ = true;
 }
 
+// 計算重投影誤差，並更新 H_ 和 Jres_
 double SparseImgAlign::computeResiduals(
     const SE3& T_cur_from_ref,
     bool linearize_system,
@@ -162,13 +181,17 @@ double SparseImgAlign::computeResiduals(
   if(linearize_system && display_)
     resimg_ = cv::Mat(cur_img.size(), CV_32F, cv::Scalar(0));
 
-  if(have_ref_patch_cache_ == false)
+  if(have_ref_patch_cache_ == false){
     precomputeReferencePatches();
+  }    
 
   // compute the weights on the first iteration
   std::vector<float> errors;
-  if(compute_weight_scale)
+
+  if(compute_weight_scale){
     errors.reserve(visible_fts_.size());
+  }    
+
   const int stride = cur_img.cols;
   const int border = patch_halfsize_+1;
   const float scale = 1.0f/(1<<level_);
@@ -176,13 +199,15 @@ double SparseImgAlign::computeResiduals(
   float chi2 = 0.0;
   size_t feature_counter = 0; // is used to compute the index of the cached jacobian
   std::vector<bool>::iterator visiblity_it = visible_fts_.begin();
+
   for(auto it=ref_frame_->fts_.begin(); it!=ref_frame_->fts_.end();
       ++it, ++feature_counter, ++visiblity_it)
   {
     // check if feature is within image
-    if(!*visiblity_it)
+    if(!*visiblity_it){
       continue;
-
+    }
+      
     // compute pixel location in cur img
     const double depth = ((*it)->point->pos_ - ref_pos).norm();
     const Vector3d xyz_ref((*it)->f*depth);
@@ -194,8 +219,10 @@ double SparseImgAlign::computeResiduals(
     const int v_cur_i = floorf(v_cur);
 
     // check if projection is within the image
-    if(u_cur_i < 0 || v_cur_i < 0 || u_cur_i-border < 0 || v_cur_i-border < 0 || u_cur_i+border >= cur_img.cols || v_cur_i+border >= cur_img.rows)
+    if(u_cur_i < 0 || v_cur_i < 0 || u_cur_i-border < 0 || v_cur_i-border < 0 || 
+    u_cur_i+border >= cur_img.cols || v_cur_i+border >= cur_img.rows){
       continue;
+    }      
 
     // compute bilateral interpolation weights for the current image
     const float subpix_u_cur = u_cur-u_cur_i;
@@ -204,24 +231,32 @@ double SparseImgAlign::computeResiduals(
     const float w_cur_tr = subpix_u_cur * (1.0-subpix_v_cur);
     const float w_cur_bl = (1.0-subpix_u_cur) * subpix_v_cur;
     const float w_cur_br = subpix_u_cur * subpix_v_cur;
-    float* ref_patch_cache_ptr = reinterpret_cast<float*>(ref_patch_cache_.data) + patch_area_*feature_counter;
-    size_t pixel_counter = 0; // is used to compute the index of the cached jacobian
+    float* ref_patch_cache_ptr = reinterpret_cast<float*>(ref_patch_cache_.data) + 
+    patch_area_*feature_counter;
+    
+    // is used to compute the index of the cached jacobian
+    size_t pixel_counter = 0; 
+    
     for(int y=0; y<patch_size_; ++y)
     {
-      uint8_t* cur_img_ptr = (uint8_t*) cur_img.data + (v_cur_i+y-patch_halfsize_)*stride + (u_cur_i-patch_halfsize_);
+      uint8_t* cur_img_ptr = (uint8_t*) cur_img.data + (v_cur_i+y-patch_halfsize_)*stride + 
+      (u_cur_i-patch_halfsize_);
 
       for(int x=0; x<patch_size_; ++x, ++pixel_counter, ++cur_img_ptr, ++ref_patch_cache_ptr)
       {
         // compute residual
-        const float intensity_cur = w_cur_tl*cur_img_ptr[0] + w_cur_tr*cur_img_ptr[1] + w_cur_bl*cur_img_ptr[stride] + w_cur_br*cur_img_ptr[stride+1];
+        const float intensity_cur = w_cur_tl*cur_img_ptr[0] + w_cur_tr*cur_img_ptr[1] + 
+        w_cur_bl*cur_img_ptr[stride] + w_cur_br*cur_img_ptr[stride+1];
         const float res = intensity_cur - (*ref_patch_cache_ptr);
 
         // used to compute scale for robust cost
-        if(compute_weight_scale)
+        if(compute_weight_scale){
           errors.push_back(fabsf(res));
+        }          
 
         // robustification
         float weight = 1.0;
+
         if(use_weights_) {
           weight = weight_function_->value(res/scale_);
         }
@@ -235,8 +270,10 @@ double SparseImgAlign::computeResiduals(
           const Vector6d J(jacobian_cache_.col(feature_counter*patch_area_ + pixel_counter));
           H_.noalias() += J*J.transpose()*weight;
           Jres_.noalias() -= J*res*weight;
-          if(display_)
+
+          if(display_){
             resimg_.at<float>((int) v_cur+y-patch_halfsize_, (int) u_cur+x-patch_halfsize_) = res/255.0;
+          }            
         }
       }
     }
@@ -252,8 +289,11 @@ double SparseImgAlign::computeResiduals(
 int SparseImgAlign::solve()
 {
   x_ = H_.ldlt().solve(Jres_);
-  if((bool) std::isnan((double) x_[0]))
+
+  if((bool) std::isnan((double) x_[0])){
     return 0;
+  }
+    
   return 1;
 }
 

@@ -39,25 +39,35 @@ void optimizeGaussNewton(
   double chi2(0.0);
   vector<double> chi2_vec_init, chi2_vec_final;
   vk::robust_cost::TukeyWeightFunction weight_function;
+
+  // 世界座標 轉 相機座標
   SE3 T_old(frame->T_f_w_);
-  Matrix6d A;
+
+  Matrix6d H;
   Vector6d b;
 
   // compute the scale of the error for robust estimation
-  std::vector<float> errors; errors.reserve(frame->fts_.size());
+  std::vector<float> errors; 
+  errors.reserve(frame->fts_.size());
 
+  // 遍歷每個 Feature*
   for(auto it=frame->fts_.begin(); it!=frame->fts_.end(); ++it)
   {
     if((*it)->point == NULL){
       continue;
     }
-      
-    Vector2d e = vk::project2d((*it)->f)
-               - vk::project2d(frame->T_f_w_ * (*it)->point->pos_);
+    
+    // 像素座標誤差 e：成像平面上的 (u, v) 和 實際測量值 相減
+    // 是 3D 點的投影位置和觀測位置的差，因此又稱『重投影誤差』
+    Vector2d e = vk::project2d((*it)->f) - vk::project2d(frame->T_f_w_ * (*it)->point->pos_);
+
+    // 根據影像金字塔的 level，調整誤差的尺度
     e *= 1.0 / (1<<(*it)->level);
+
     errors.push_back(e.norm());
   }
 
+  // 當全部 (*it)->point 都是 NULL 才會發生
   if(errors.empty()){
     return;
   }
@@ -74,11 +84,12 @@ void optimizeGaussNewton(
   {
     // overwrite scale
     if(iter == 5){
+      // 若誤差小於 0.85，則 scale 會大於 1; 反之則會小於 1
       scale = 0.85/frame->cam_->errorMultiplier2();
     }
     
     b.setZero();
-    A.setZero();
+    H.setZero();
     double new_chi2(0.0);
 
     // compute residual
@@ -90,25 +101,36 @@ void optimizeGaussNewton(
         
       Matrix26d J;
       Vector3d xyz_f(frame->T_f_w_ * (*it)->point->pos_);
+
+      // 求取雅可比矩陣 J(2 X 6)
       Frame::jacobian_xyz2uv(xyz_f, J);
+
+      // 像素座標誤差 e：成像平面上的 (u, v) 和 實際測量值 相減
+      // 是 3D 點的投影位置和觀測位置的差，因此又稱『重投影誤差』
       Vector2d e = vk::project2d((*it)->f) - vk::project2d(xyz_f);
+
       double sqrt_inv_cov = 1.0 / (1<<(*it)->level);
+
+      // 根據影像金字塔的 level，調整誤差的尺度
       e *= sqrt_inv_cov;
 
       if(iter == 0){
         // just for debug
         chi2_vec_init.push_back(e.squaredNorm()); 
       }
-        
+      
+      // 根據影像金字塔的 level，調整雅可比矩陣 J 的尺度
       J *= sqrt_inv_cov;
+
       double weight = weight_function.value(e.norm()/scale);
-      A.noalias() += J.transpose()*J*weight;
+
+      H.noalias() += J.transpose()*J*weight;
       b.noalias() -= J.transpose()*e*weight;
       new_chi2 += e.squaredNorm()*weight;
     }
 
-    // solve linear system
-    const Vector6d dT(A.ldlt().solve(b));
+    // solve linear system H * dT = b
+    const Vector6d dT(H.ldlt().solve(b));
 
     // check if error increased
     if((iter > 0 && new_chi2 > chi2) || (bool) std::isnan((double)dT[0]))
@@ -124,8 +146,8 @@ void optimizeGaussNewton(
       break;
     }
 
-    // update the model
-    SE3 T_new = SE3::exp(dT)*frame->T_f_w_;
+    // update the model 左乘擾動 SE3::exp(dT) 李代數轉李群的形式
+    SE3 T_new = SE3::exp(dT) * frame->T_f_w_;
     T_old = frame->T_f_w_;
     frame->T_f_w_ = T_new;
     chi2 = new_chi2;
@@ -144,7 +166,7 @@ void optimizeGaussNewton(
 
   // Set covariance as inverse information matrix. Optimistic estimator!
   const double pixel_variance=1.0;
-  frame->Cov_ = pixel_variance*(A*std::pow(frame->cam_->errorMultiplier2(),2)).inverse();
+  frame->Cov_ = pixel_variance*(H*std::pow(frame->cam_->errorMultiplier2(),2)).inverse();
 
   // Remove Measurements with too large reprojection error
   double reproj_thresh_scaled = reproj_thresh / frame->cam_->errorMultiplier2();

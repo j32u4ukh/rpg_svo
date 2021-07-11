@@ -48,6 +48,7 @@ void AbstractDetector::setExistingFeatures(const Features& fts)
   });
 }
 
+// 將像素點所在網格設置為被佔據
 void AbstractDetector::setGridOccpuancy(const Vector2d& px)
 {
   grid_occupancy_.at(
@@ -74,12 +75,13 @@ void FastDetector::detect(
   // vector 初始化：長度為 grid_n_cols_ * grid_n_rows_，預設值為 Corner(0, 0, detection_threshold, 0, 0.0f)
   Corners corners(grid_n_cols_ * grid_n_rows_, Corner(0, 0, detection_threshold, 0, 0.0f));
 
+  // 影像金字塔，根據不同『金字塔層級 L』來取得不同尺度下的特徵
   for(int L = 0; L < n_pyr_levels_; ++L)
   {
-    // << 位元往左 1 位，相當於乘以 2
+    // 縮放尺度 << 位元往左 1 位，相當於乘以 2
     const int scale = (1 << L);
 
-    // 
+    // 存放找到的角點
     vector<fast::fast_xy> fast_corners;
 
 #if __SSE2__
@@ -96,6 +98,7 @@ void FastDetector::detect(
           img_pyr[L].rows, img_pyr[L].cols, 20, fast_corners);
 #endif
 
+    // 針對找到的角點進行評價，並返回高於門檻值的角點
     vector<int> scores, nm_corners;
     fast::fast_corner_score_10(
       (fast::fast_byte*) img_pyr[L].data, img_pyr[L].cols, fast_corners, 20, scores);
@@ -103,7 +106,10 @@ void FastDetector::detect(
 
     for(auto it=nm_corners.begin(), ite=nm_corners.end(); it!=ite; ++it)
     {
+      // 依序取出分數高的角點
       fast::fast_xy& xy = fast_corners.at(*it);
+
+      // 根據縮放尺度(scale)計算網格中的索引值
       const int k = static_cast<int>((xy.y*scale)/cell_size_)*grid_n_cols_
                   + static_cast<int>((xy.x*scale)/cell_size_);
 
@@ -113,6 +119,7 @@ void FastDetector::detect(
         
       const float score = vk::shiTomasiScore(img_pyr[L], xy.x, xy.y);
       
+      // 若當前分數較原先網格內的高，則取代它成為新的數據
       if(score > corners.at(k).score){
         corners.at(k) = Corner(xy.x*scale, xy.y*scale, score, L, 0.0f);
       }        
@@ -121,7 +128,10 @@ void FastDetector::detect(
 
   // Create feature for every corner that has high enough corner score
   std::for_each(corners.begin(), corners.end(), [&](Corner& c) {
+    // 若角點的分數 高於 偵測用門檻
     if(c.score > detection_threshold){
+
+      // 形成特徵點
       fts.push_back(new Feature(frame, Vector2d(c.x, c.y), c.level));
     }      
   });

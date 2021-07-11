@@ -35,7 +35,9 @@ struct Feature
   Frame* frame;         //!< Pointer to frame in which the feature was detected.
   Vector2d px;          //!< Coordinates in pixels on pyramid level 0.
   
-  // Unit-bearing vector of the feature. Oriented FAST 特徵的方向。
+  // Unit-bearing vector of the feature. 
+  // 以相機為中心，特徵點在成像平面上的位置，由於 Z 值固定為焦距長(focal)，因此只有兩個自由度
+  // (pixel.x - imageCentreX, pixel.y - imageCentreY, focalLength)
   Vector3d f;           
 
   int level;            //!< Image pyramid level where feature was extracted.

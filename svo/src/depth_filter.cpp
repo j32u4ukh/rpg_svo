@@ -97,6 +97,7 @@ namespace svo
       updateSeeds(frame);
   }
 
+  // 加入新的頁框，並觸發 frame_queue_cond_
   void DepthFilter::addKeyframe(FramePtr frame, double depth_mean, double depth_min)
   {
     new_keyframe_min_depth_ = depth_min;
@@ -115,6 +116,13 @@ namespace svo
     }
   }
 
+  /* 初始化種子
+  * 當前幀上已經有的特征點，占據住網格
+  * 多層金字塔 FAST 特征檢測並進行非極大值抑制，映射到第 0 層網格，每個網格保留 Shi-Tomas 分數最大的點
+  * 對於所有的新的特征點，初始化成種子點 Seed
+  ** 高斯分布均值：mu = 1.0/depth_mean
+  ** 高斯分布方差：sigma2 = z_range*z_range/36，其中 z_range = 1.0/depth_min
+  */
   void DepthFilter::initializeSeeds(FramePtr frame)
   {
     // 使用 FastDetector 作為深度濾波器的特徵檢測器
@@ -131,8 +139,9 @@ namespace svo
 
     ++Seed::batch_counter;
 
-    std::for_each(new_features.begin(), new_features.end(), [&](Feature *ftr)
-                  { seeds_.push_back(Seed(ftr, new_keyframe_mean_depth_, new_keyframe_min_depth_)); });
+    std::for_each(new_features.begin(), new_features.end(), [&](Feature *ftr){ 
+      seeds_.push_back(Seed(ftr, new_keyframe_mean_depth_, new_keyframe_min_depth_)); 
+    });
 
     if (options_.verbose)
     {
@@ -182,20 +191,31 @@ namespace svo
     while (!boost::this_thread::interruption_requested())
     {
       FramePtr frame;
+
+      // 更新 frame
       {
         lock_t lock(frame_queue_mut_);
-        while (frame_queue_.empty() && new_keyframe_set_ == false)
+
+        while (frame_queue_.empty() && new_keyframe_set_ == false){
           frame_queue_cond_.wait(lock);
+        }          
+
         if (new_keyframe_set_)
         {
           new_keyframe_set_ = false;
           seeds_updating_halt_ = false;
+
+          // 清空 frame_queue_
           clearFrameQueue();
+
           frame = new_keyframe_;
         }
         else
         {
+          // 取得 frame_queue_ 中第一個元素（frame）
           frame = frame_queue_.front();
+
+          // 刪除 frame_queue_ 的第一個元素
           frame_queue_.pop();
         }
       }
@@ -208,6 +228,11 @@ namespace svo
     }
   }
 
+  /* 更新種子（深度濾波）
+  * 極線搜索與三角測量 Matcher::findEpipolarMatchDirect
+  * 計算深度不確定度 DepthFilter::computeTau
+  * 深度融合，更新種子 DepthFilter::updateSeed
+  * 初始化新的地圖點，移除種子點*/
   void DepthFilter::updateSeeds(FramePtr frame)
   {
     // update only a limited number of seeds, because we don't have time to do it
@@ -218,14 +243,17 @@ namespace svo
 
     const double focal_length = frame->cam_->errorMultiplier2();
     double px_noise = 1.0;
-    double px_error_angle = atan(px_noise / (2.0 * focal_length)) * 2.0; // law of chord (sehnensatz)
+
+    // law of chord (sehnensatz) 偏差一個像素時，會使得深度估計偏差多少度
+    double px_error_angle = atan(px_noise / (2.0 * focal_length)) * 2.0; 
 
     while (it != seeds_.end())
     {
       // set this value true when seeds updating should be interrupted
-      if (seeds_updating_halt_)
+      if (seeds_updating_halt_){
         return;
-
+      }
+      
       // check if seed is not already too old
       if ((Seed::batch_counter - it->batch_id) > options_.max_n_kfs)
       {
@@ -233,17 +261,23 @@ namespace svo
         continue;
       }
 
+      // 檢查 it 所代表的點，是否能被當前的頁框所觀察到
       // check if point is visible in the current image
       SE3 T_ref_cur = it->ftr->frame->T_f_w_ * frame->T_f_w_.inverse();
+
       const Vector3d xyz_f(T_ref_cur.inverse() * (1.0 / it->mu * it->ftr->f));
+
+      // behind the camera
       if (xyz_f.z() < 0.0)
       {
-        ++it; // behind the camera
+        ++it; 
         continue;
       }
+
+      // point does not project in image
       if (!frame->cam_->isInFrame(frame->f2c(xyz_f).cast<int>()))
       {
-        ++it; // point does not project in image
+        ++it; 
         continue;
       }
 
@@ -251,20 +285,26 @@ namespace svo
       float z_inv_min = it->mu + sqrt(it->sigma2);
       float z_inv_max = max(it->mu - sqrt(it->sigma2), 0.00000001f);
       double z;
+
+      // 極線搜索與三角測量
       if (!matcher_.findEpipolarMatchDirect(
               *it->ftr->frame, *frame, *it->ftr, 1.0 / it->mu, 1.0 / z_inv_min, 1.0 / z_inv_max, z))
       {
-        it->b++; // increase outlier probability when no match was found
+        // increase outlier probability when no match was found
+        it->b++; 
+
         ++it;
         ++n_failed_matches;
         continue;
       }
 
-      // compute tau
+      // compute tau 計算深度不確定度
       double tau = computeTau(T_ref_cur, it->ftr->f, z, px_error_angle);
+
+      // 逆深度不確定度
       double tau_inverse = 0.5 * (1.0 / max(0.0000001, z - tau) - 1.0 / (z + tau));
 
-      // update the estimate
+      // update the estimate 深度融合，更新種子 
       updateSeed(1. / z, tau_inverse * tau_inverse, &*it);
       ++n_updates;
 
@@ -274,10 +314,13 @@ namespace svo
         feature_detector_->setGridOccpuancy(matcher_.px_cur_);
       }
 
+      // 初始化新的地圖點，移除種子點
       // if the seed has converged, we initialize a new candidate point and remove the seed
       if (sqrt(it->sigma2) < it->z_range / options_.seed_convergence_sigma2_thresh)
       {
-        assert(it->ftr->point == NULL); // TODO this should not happen anymore
+        // TODO this should not happen anymore
+        assert(it->ftr->point == NULL); 
+
         Vector3d xyz_world(it->ftr->frame->T_f_w_.inverse() * (it->ftr->f * (1.0 / it->mu)));
         Point *point = new Point(xyz_world, it->ftr);
         it->ftr->point = point;
@@ -295,6 +338,7 @@ namespace svo
         {
           seed_converged_cb_(point, it->sigma2); // put in candidate list
         }
+
         it = seeds_.erase(it);
       }
       else if (isnan(z_inv_min))
@@ -302,15 +346,18 @@ namespace svo
         SVO_WARN_STREAM("z_min is NaN");
         it = seeds_.erase(it);
       }
-      else
+      else{
         ++it;
+      }        
     }
   }
 
   void DepthFilter::clearFrameQueue()
   {
-    while (!frame_queue_.empty())
+    while (!frame_queue_.empty()){
+      // 刪除 frame_queue_ 的第一個元素
       frame_queue_.pop();
+    }
   }
 
   void DepthFilter::getSeedsCopy(const FramePtr &frame, std::list<Seed> &seeds)
@@ -326,16 +373,22 @@ namespace svo
   void DepthFilter::updateSeed(const float x, const float tau2, Seed *seed)
   {
     float norm_scale = sqrt(seed->sigma2 + tau2);
-    if (std::isnan(norm_scale))
+
+    if (std::isnan(norm_scale)){
       return;
+    }      
+
     boost::math::normal_distribution<float> nd(seed->mu, norm_scale);
     float s2 = 1. / (1. / seed->sigma2 + 1. / tau2);
     float m = s2 * (seed->mu / seed->sigma2 + x / tau2);
+
     float C1 = seed->a / (seed->a + seed->b) * boost::math::pdf(nd, x);
     float C2 = seed->b / (seed->a + seed->b) * 1. / seed->z_range;
+
     float normalization_constant = C1 + C2;
     C1 /= normalization_constant;
     C2 /= normalization_constant;
+
     float f = C1 * (seed->a + 1.) / (seed->a + seed->b + 1.) + C2 * seed->a / (seed->a + seed->b + 1.);
     float e = C1 * (seed->a + 1.) * (seed->a + 2.) / ((seed->a + seed->b + 1.) * (seed->a + seed->b + 2.)) + C2 * seed->a * (seed->a + 1.0f) / ((seed->a + seed->b + 1.0f) * (seed->a + seed->b + 2.0f));
 

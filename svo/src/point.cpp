@@ -160,9 +160,12 @@ void Point::optimize(const size_t n_iter)
 
       // 當前這個點，轉換到含有『特徵 it』的相機座標系下
       const Vector3d p_in_f((*it)->frame->T_f_w_ * pos_);
-      Point::jacobian_xyz2uv(p_in_f, (*it)->frame->T_f_w_.rotation_matrix(), J);
+
+      // Point::jacobian_xyz2uv 並不會修改到 p_in_f 的數值，而是利用它來計算 J，因此移到後面也沒關係
+      // Point::jacobian_xyz2uv(p_in_f, (*it)->frame->T_f_w_.rotation_matrix(), J);
 
       // 像素座標誤差 e：成像平面上的 (u, v) 和 實際測量值 相減
+      // 是 3D 點的投影位置和觀測位置的差，因此又稱『重投影誤差』
       const Vector2d e(vk::project2d((*it)->f) - vk::project2d(p_in_f));
       new_chi2 += e.squaredNorm();
 
@@ -170,7 +173,13 @@ void Point::optimize(const size_t n_iter)
       在 Eigen 中，當變量同時出現在左值和右值，賦值操作可能會帶來混淆問題。一般的操作，Eigen 默認都是存在混淆的。
       所以 Eigen 對矩陣乘法自動引入了臨時變量，對的 matA = matA * matA 這是必須的，
       但是對 matB = matA * matA 這樣便是不必要的了。我們可以使用 noalias() 函數來聲明這里沒有混淆，
-      matA * matA 的結果可以直接賦值為 matB。matB.noalias() = matA * matA;*/
+      matA * matA 的結果可以直接賦值為 matB。matB.noalias() = matA * matA;
+      
+      參考：https://www.cnblogs.com/defe-learn/p/7456778.html
+
+      高斯牛頓法中，J^T * J 和 J^T * e 才是正確的順序，十四講的順序應該是錯的。
+      */
+      Point::jacobian_xyz2uv(p_in_f, (*it)->frame->T_f_w_.rotation_matrix(), J);
       H.noalias() += J.transpose() * J;
       b.noalias() -= J.transpose() * e;
     }

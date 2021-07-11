@@ -101,7 +101,10 @@ protected:
 
   vk::RingBuffer<double> acc_frame_timings_;    //!< Total processing time of the last 10 frames, used to give some user feedback on the performance.
   vk::RingBuffer<size_t> acc_num_obs_;          //!< Number of observed features of the last 10 frames, used to give some user feedback on the tracking performance.
-  size_t num_obs_last_;                         //!< Number of observations in the previous frame.
+  
+  // 前一幀觀察到的特徵數量 Number of observations in the previous frame.
+  size_t num_obs_last_;
+  
   TrackingQuality tracking_quality_;            //!< An estimate of the tracking quality based on the number of tracked features.
 
   /// Before a frame is processed, this function is called.

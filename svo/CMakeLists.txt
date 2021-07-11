@@ -75,6 +75,9 @@ ELSE()
   SET(LIBRARY_OUTPUT_PATH ${PROJECT_SOURCE_DIR}/lib)
 ENDIF()
 
+# Add by myself
+set(Sophus_LIBRARIES libSophus.so)
+
 # Include dirs
 INCLUDE_DIRECTORIES(
   include

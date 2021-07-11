@@ -57,6 +57,7 @@ InitResult KltHomographyInit::addSecondFrame(FramePtr frame_cur)
 {
   // ref_ 為前一幀的資訊
   // 追蹤第二幀當中的第一幀角點，若追蹤失敗，則將該角點移除
+  // disparities_：前後幀同一角點的距離
   trackKlt(frame_ref_, frame_cur, px_ref_, px_cur_, f_ref_, f_cur_, disparities_);
   SVO_INFO_STREAM("Init: KLT tracked "<< disparities_.size() <<" features");
 
@@ -79,6 +80,7 @@ InitResult KltHomographyInit::addSecondFrame(FramePtr frame_cur)
       f_ref_, f_cur_,
       frame_ref_->cam_->errorMultiplier2(), Config::poseOptimThresh(),
       inliers_, xyz_in_cur_, T_cur_from_ref_);
+
   SVO_INFO_STREAM("Init: Homography RANSAC "<<inliers_.size()<<" inliers.");
 
   // 檢查內點數量是否足夠
@@ -139,6 +141,7 @@ InitResult KltHomographyInit::addSecondFrame(FramePtr frame_cur)
       new_point->addFrameRef(ftr_ref);
     }
   }
+  
   return SUCCESS;
 }
 
@@ -177,7 +180,7 @@ void detectFeatures(
     // 角點的位置
     px_vec.push_back(cv::Point2f(ftr->px[0], ftr->px[1]));
 
-    // Oriented FAST 角點的方向
+    // 相機座標下的成像平面像素點（深度為焦距長）
     f_vec.push_back(ftr->f);
 
     delete ftr;
@@ -201,11 +204,15 @@ void trackKlt(
   vector<float> error;
   vector<float> min_eig_vec;
   cv::TermCriteria termcrit(cv::TermCriteria::COUNT+cv::TermCriteria::EPS, klt_max_iter, klt_eps);
+
+  // 這裡的 px_ref 和 px_cur 為相同的內容，因為基於光流法對相同點位移不大的假設
   cv::calcOpticalFlowPyrLK(frame_ref->img_pyr_[0], frame_cur->img_pyr_[0],
                            px_ref, px_cur,
                            status, error,
                            cv::Size2i(klt_win_size, klt_win_size),
                            4, termcrit, cv::OPTFLOW_USE_INITIAL_FLOW);
+
+  // 將過光流法的計算後，若位移不大的點，應可被追蹤到
 
   vector<cv::Point2f>::iterator px_ref_it = px_ref.begin();
   vector<cv::Point2f>::iterator px_cur_it = px_cur.begin();
@@ -260,6 +267,7 @@ void computeHomography(
     uv_cur[i] = vk::project2d(f_cur[i]);
   }
 
+  // 單應性矩陣：描述兩頁框的運動 Homography.T_c2_from_c1
   vk::Homography Homography(uv_ref, uv_cur, focal_length, reprojection_threshold);
   Homography.computeSE3fromMatches();
 

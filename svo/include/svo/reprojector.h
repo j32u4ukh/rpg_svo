@@ -67,8 +67,13 @@ private:
   /// will search a maching feature in the image.
   struct Candidate {
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
-    Point* pt;       //!< 3D point.
-    Vector2d px;     //!< projected 2D pixel location.
+
+    // 3D point.
+    Point* pt;       
+
+    // projected 2D pixel location.
+    Vector2d px;     
+
     Candidate(Point* pt, Vector2d& px) : pt(pt), px(px) {}
   };
   
